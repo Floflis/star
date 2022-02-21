@@ -1,17 +1,17 @@
-/* @(#)acl_unix.c	1.49 14/03/31 Copyright 2001-2014 J. Schilling */
+/* @(#)acl_unix.c	1.57 19/01/19 Copyright 2001-2019 J. Schilling */
 #include <schily/mconfig.h>
 #ifndef lint
 static	UConst char sccsid[] =
-	"@(#)acl_unix.c	1.49 14/03/31 Copyright 2001-2014 J. Schilling";
+	"@(#)acl_unix.c	1.57 19/01/19 Copyright 2001-2019 J. Schilling";
 #endif
 /*
  *	ACL get and set routines for unix like operating systems.
  *
- *	Copyright (c) 2001-2014 J. Schilling
+ *	Copyright (c) 2001-2019 J. Schilling
  *
  *	There are currently two basic flavors of ACLs:
  *
- *	Flavor 1: UFS/POSIX draft
+ *	Flavor 1: UFS/POSIX.1e draft (withrawn in 1997)
  *
  *	The Solaric UFS ACLs that have been developed between 1990 and 1994.
  *	These ACLs have been made available as extensions to NFSv2 and NFSv3.
@@ -27,7 +27,7 @@ static	UConst char sccsid[] =
  *	As True64 does not like ACL "mask" entries and this version of the
  * 	ACL code does not generate "mask" entries on True64, ACL support for
  *	True64 is currently broken. You cannot read back archives created
- *	on true64.
+ *	on True64.
  *
  *	Flavor 2: NFSv4
  *
@@ -59,8 +59,8 @@ static	UConst char sccsid[] =
  */
 #ifdef	OWN_ACLTEXT
 #if	defined(UNIXWARE) && defined(HAVE_ACL)
-#	define	HAVE_SUN_ACL
-#	define	HAVE_ANY_ACL
+#define	HAVE_SUN_ACL
+#define	HAVE_ANY_ACL
 #endif
 #endif
 /*
@@ -71,9 +71,9 @@ static	UConst char sccsid[] =
  * star.h at all.
  * HAVE_HP_ACL is currently not included in HAVE_ANY_ACL.
  */
-#	ifndef	HAVE_ANY_ACL
-#	undef	USE_ACL		/* Do not try to get or set ACLs */
-#	endif
+#ifndef	HAVE_ANY_ACL
+#undef	USE_ACL			/* Do not try to get or set ACLs */
+#endif
 #endif
 
 #include <schily/stdio.h>
@@ -87,6 +87,8 @@ static	UConst char sccsid[] =
 #include <schily/dirent.h>
 #include <schily/string.h>
 #include <schily/stat.h>
+#define	GT_COMERR		/* #define comerr gtcomerr */
+#define	GT_ERROR		/* #define error gterror   */
 #include <schily/schily.h>
 #include <schily/idcache.h>
 #include "starsubs.h"
@@ -96,11 +98,11 @@ static	UConst char sccsid[] =
 #ifdef	USE_ACL
 
 #ifdef	HAVE_SYS_ACL_H
-#	include <sys/acl.h>
+#include <sys/acl.h>
 #endif
 #ifdef	HAVE_NFSV4_ACL
 #ifdef	HAVE_ACLUTILS_H
-#	include <aclutils.h>
+#include <aclutils.h>
 #else
 extern	char	*acl_strerror	__PR((int));
 extern	int	acl_type	__PR((acl_t *));
@@ -188,6 +190,9 @@ LOCAL	char	*acl_add_ids	__PR((char *dst, char *from, char *end, int *sizep));
 LOCAL	char	*base_acl	__PR((mode_t mode));
 LOCAL	void	acl_check_ids	__PR((char *acltext, char *infotext, BOOL is_nfsv4));
 
+#ifdef	HAVE_NFSV4_ACL
+LOCAL	void	nfsv4_shrink	__PR((char *acltext));
+#endif
 
 #ifdef HAVE_POSIX_ACL	/* The withdrawn POSIX.1e draft */
 
@@ -196,6 +201,9 @@ EXPORT void
 opt_acl()
 {
 	printf(" acl-POSIX.1e-draft");
+#ifdef	HAVE_NFSV4_ACL
+	printf(" acl-NFSv4");
+#endif
 }
 
 /*
@@ -217,6 +225,15 @@ get_acls(info)
 	if (is_symlink(info))
 		return (TRUE);
 
+#ifdef	HAVE_FREEBSD_NFSV4_ACL
+	if (acl_to_info(info->f_sname, ACL_TYPE_NFS4, &acl_ace_text)) {
+		if (*acl_ace_text.ps_path != '\0') {
+			info->f_xflags |= XF_ACL_ACE;
+			info->f_acl_ace = acl_ace_text.ps_path;
+		}
+		return (TRUE);
+	}
+#endif
 	if (!acl_to_info(info->f_sname, ACL_TYPE_ACCESS, &acl_access_text))
 		return (FALSE);
 	if (*acl_access_text.ps_path != '\0') {
@@ -263,6 +280,13 @@ acl_to_info(name, type, acltext)
 		if (err == ENOSYS)
 			return (TRUE);
 #endif
+#ifdef	HAVE_FREEBSD_NFSV4_ACL
+		/*
+		 * If ACL type is not NFS4 we continue with POSIX.1e ACLs
+		 */
+		if (type == ACL_TYPE_NFS4 && err == EINVAL)
+			return (FALSE);
+#endif
 		if (!errhidden(E_GETACL, name)) {
 			if (!errwarnonly(E_GETACL, name))
 				xstats.s_getaclerrs++;
@@ -273,7 +297,12 @@ acl_to_info(name, type, acltext)
 		return (FALSE);
 	}
 	seterrno(0);
-	text = acl_to_text(acl, NULL);
+#ifdef	HAVE_FREEBSD_NFSV4_ACL
+	if (type == ACL_TYPE_NFS4)
+		text = acl_to_text_np(acl, NULL, ACL_TEXT_APPEND_ID);
+	else
+#endif
+		text = acl_to_text(acl, NULL);
 	acl_free(acl);
 	if (text == NULL) {
 		if (geterrno() == 0)
@@ -313,6 +342,22 @@ acl_to_info(name, type, acltext)
 			;
 	}
 
+#ifdef	HAVE_FREEBSD_NFSV4_ACL
+	/* remove space fields */
+	if (type == ACL_TYPE_NFS4) {
+		c = text;
+		while ((c = strchr(c, ' ')) != NULL) {
+			char *d = c, *e;
+
+			while (*d && *d == ' ')
+				d++;
+			e = c;
+			while ((*e++ = *d++) != '\0')
+				;
+		}
+	}
+#endif
+
 	/* count fields */
 	for (c = text; *c != '\0'; c++) {
 		if (*c == '\n') {
@@ -320,6 +365,14 @@ acl_to_info(name, type, acltext)
 			entries++;
 		}
 	}
+#ifdef	HAVE_FREEBSD_NFSV4_ACL
+	if (type == ACL_TYPE_NFS4) {
+		if (strcpy_pspace(PS_EXIT, acltext, text) < 0) {
+			acl_free((acl_t)text);
+			return (FALSE);
+		}
+	} else
+#endif
 	if ((entries > 3) || /* > 4 on Solaris? */
 	    (type == ACL_TYPE_DEFAULT && entries >= 3)) {
 		if ((entries * 56) > acltext->ps_size)
@@ -440,12 +493,61 @@ EXPORT void
 set_acls(info)
 	register FINFO	*info;
 {
-	char		acltext[PATH_MAX+1];
+	char		acltext[PATH_MAX+1];	/* auto space only if small */
 	pathstore_t	aclps;
 	acl_t		acl;
 
 	aclps.ps_path = acltext;
 	aclps.ps_size = PATH_MAX;
+
+#ifdef	HAVE_FREEBSD_NFSV4_ACL
+	if (info->f_xflags & XF_ACL_ACE) {
+		ssize_t	len = strlen(info->f_acl_ace) + 2;
+
+		if (len > aclps.ps_size) {
+			aclps.ps_path = NULL;
+			aclps.ps_size = 0;
+			grow_pspace(PS_EXIT, &aclps, len);
+			if (aclps.ps_size <= len) {
+				free_pspace(&aclps);
+				return;
+			}
+		}
+		acl_check_ids(aclps.ps_path, info->f_acl_ace, TRUE);
+
+		if ((acl = acl_from_text(aclps.ps_path)) == NULL) {
+			if (!errhidden(E_BADACL, info->f_name)) {
+				if (!errwarnonly(E_BADACL, info->f_name))
+					xstats.s_badacl++;
+				errmsg("Cannot convert NFSv4 ACL '%s' to internal format for ' %s'.\n",
+				    aclps.ps_path, info->f_name);
+				(void) errabort(E_BADACL, info->f_name, TRUE);
+			}
+		} else {
+			if (acl_set_file(info->f_name, ACL_TYPE_NFS4,
+			    acl) < 0) {
+				/*
+				 * XXX What should we do if errno is
+				 * ENOTSUP/ENOSYS?
+				 */
+				if (!errhidden(E_SETACL, info->f_name)) {
+					if (!errwarnonly(E_SETACL,
+					    info->f_name))
+						xstats.s_setacl++;
+					errmsg("Cannot set NFSv4 ACL '%s' for '%s'.\n",
+					    aclps.ps_path, info->f_name);
+					(void) errabort(E_SETACL, info->f_name,
+					    TRUE);
+				}
+			}
+			acl_free(acl);
+		}
+		if (aclps.ps_path != acltext)
+			free_pspace(&aclps);
+		return;
+	}
+#endif	/* HAVE_FREEBSD_NFSV4_ACL */
+
 	if (info->f_xflags & XF_ACL_ACCESS) {
 		ssize_t	len = strlen(info->f_acl_access) + 2;
 
@@ -505,7 +607,7 @@ set_acls(info)
 	}
 
 	if (info->f_xflags & XF_ACL_DEFAULT) {
-		ssize_t	len = strlen(info->f_acl_access) + 2;
+		ssize_t	len = strlen(info->f_acl_default) + 2;
 
 		if (len > aclps.ps_size) {
 			if (aclps.ps_path == acltext) {
@@ -678,6 +780,8 @@ get_acls(info)
 			return (FALSE);
 		}
 		free(acltext);
+		nfsv4_shrink(acl_ace_text.ps_path);
+
 		info->f_xflags |= XF_ACL_ACE;
 		info->f_acl_ace = acl_ace_text.ps_path;
 		return (TRUE);
@@ -991,7 +1095,7 @@ set_acls(info)
 		acl_check_ids(aclps.ps_path, info->f_acl_access, FALSE);
 	}
 	if (info->f_xflags & XF_ACL_DEFAULT) {
-			char		acltext[PATH_MAX+1];
+			char		acltext[PATH_MAX+1]; /* only if small */
 			pathstore_t	acldps;
 		register char	*cp;
 		register char	*dp;
@@ -1430,6 +1534,48 @@ acl_check_ids(acltext, infotext, is_nfsv4)
 	}
 	*(--acltext) = '\0';
 }
+
+#ifdef	HAVE_NFSV4_ACL
+LOCAL void
+nfsv4_shrink(acltext)
+	register char	*acltext;
+{
+	register char		*ap;
+	register char		*cp;
+	register char		*ep;
+		int		asize = strlen(acltext) - 24;
+
+	for (ap = cp = acltext; *cp; *ap++ = *cp++) {
+		if (*cp == ':') {
+			/*
+			 * Check whether the rest of the string is long
+			 * enough for a complete ACE and whether this
+			 * colon is the beginning of a
+			 * ":rwxpdDaARWcCos:fdinSFI:" block.
+			 */
+			if ((cp - acltext) > asize)
+				continue;
+			if (cp[15] != ':')
+				continue;
+			if (cp[23] != ':')
+				continue;
+			/*
+			 * Remove '-'s from the ACE block to make it
+			 * higly compact in order to let more ACEs
+			 * fit into a 512 Byte exteded header block.
+			 */
+			for (ep = &cp[23]; cp <= ep; ) {
+				if (*cp == '-') {
+					cp++;
+					continue;
+				}
+				*ap++ = *cp++;
+			}
+		}
+	}
+	*ap = '\0';	/* Add null byte to the new end */
+}
+#endif	/* HAVE_NFSV4_ACL */
 
 #endif  /* USE_ACL */
 

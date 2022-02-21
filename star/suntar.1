@@ -1,4 +1,4 @@
-. \" @(#)suntar.1	1.8 08/03/19 Copyr 2004-2008 J. Schilling
+. \" @(#)suntar.1	1.14 19/01/05 Copyr 2004-2019 J. Schilling
 . \"  Manual Seite fuer suntar
 . \"
 .if t .ds a \v'-0.55m'\h'0.00n'\z.\h'0.40n'\z.\v'0.55m'\h'-0.40n'a
@@ -13,7 +13,7 @@
 .if n .ds o oe
 .if n .ds u ue
 .if n .ds s sz
-.TH STUNAR 1 "08/03/19" "J\*org Schilling" "Schily\'s USER COMMANDS"
+.TH STUNAR 1 "2019/01/05" "J\*org Schilling" "Schily\'s USER COMMANDS"
 .SH NAME
 suntar \- create tape archives and add or extract files
 .SH SYNOPSIS
@@ -92,6 +92,9 @@ program currently does not operate on a pipe but on a
 .B \-\-secure\-links
 don't extract links that start with '/' or contain '..'
 .TP
+.B \-\-no\-secure\-links
+extract links that start with '/' or contain '..'
+.TP
 .B \-\-acl
 handle access control lists
 .TP
@@ -105,7 +108,10 @@ set (output) block size to #
 set fifo size to #
 .TP
 .B \-\-no\-fsync
-do not call fsync() for each extracted file (may be dangerous)
+do not call fsync() for each extracted file (may be dangerous).
+.TP
+.B \-\-do\-fsync
+call fsync() for each extracted file.
 .TP
 .B \-\-time
  print timing info
@@ -126,19 +132,35 @@ don't use a fifo to optimize data flow from/to tape
 don't use user/group name from tape
 .TP
 .B \-\-lzo
-pipe input/output through lzop, does not work on tapes
+pipe input/output through
+.BR lzop ,
+does not work on tapes
+.TP
+.B \-\-lzip
+pipe input/output through
+.BR lzip ,
+does not work on tapes
 .TP
 .B \-z
-pipe input/output through gzip, does not work on tapes
+pipe input/output through
+.BR gzip ,
+does not work on tapes
 .TP
 .B \-\-bz
-pipe input/output through bzip2, does not work on tapes
+pipe input/output through
+.BR bzip2 ,
+does not work on tapes
+.TP
+.B \-\-zstd
+pipe input/output through
+.BR zstd ,
+does not work on tapes
 .PP
 The options above are not defined by Sun tar.
 .PP
 For a complete documentation of the
 .B star
-based optione check
+based options check
 .BR star (1).
 
 .SH EXAMPLES
@@ -160,7 +182,7 @@ based optione check
 .BR rsh (1),
 .BR ssh (1),
 .BR star (1),
-.BR star (4/5),
+.BR star (4),
 .BR rcmd (3),
 .BR fssnap (1m)
 .SH DIAGNOSTICS
@@ -188,10 +210,7 @@ Germany
 Mail bugs and suggestions to:
 .PP
 .B
-schilling@fokus.fraunhofer.de
+joerg.schilling@fokus.fraunhofer.de
 or
 .B
-js@cs.tu\-berlin.de
-or
-.B
-joerg@schily.isdn.cs.tu\-berlin.de
+joerg@schily.net

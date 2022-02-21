@@ -1,6 +1,6 @@
-#ident "@(#)bepc-haiku-gcc.rul	1.3 09/02/05 "
+#ident "@(#)bepc-haiku-gcc.rul	1.7 18/04/11 "
 ###########################################################################
-# Written 1996 by J. Schilling
+# Written 1996-2018 by J. Schilling
 ###########################################################################
 #
 # Platform dependent MACROS for Haiku, a BeOS like OS
@@ -14,13 +14,15 @@
 # with the License.
 #
 # See the file CDDL.Schily.txt in this distribution for details.
+# A copy of the CDDL is also available via the Internet at
+# http://www.opensource.org/licenses/cddl1.txt
 #
 # When distributing Covered Code, include this CDDL HEADER in each
 # file and include the License file CDDL.Schily.txt from this distribution.
 ###########################################################################
 include $(SRCROOT)/$(RULESDIR)/rules.prg
 ###########################################################################
-include $(SRCROOT)/$(RULESDIR)/cc-gcc.rul
+include $(SRCROOT)/$(RULESDIR)/cc-$(C_ARCH).rul
 
 #
 # XXX Old BeOS needs libroot.so to get [efg]cvt()
@@ -38,7 +40,9 @@ KDEFINES=	-DKERNEL -D_KERNEL
 
 LIB_PREFIX=	lib
 LIB_SUFFIX=	.a
-SHL_SUFFIX=	.so
+SHL_SUFFIX=	.so.$(DYNMAJOR).$(DYNMINOR)
+
+LIB_C=
 
 #LIB_SOCKET=	-lsocket -lbind
 LIB_SOCKET=	-lnetwork

@@ -1,4 +1,4 @@
-#ident @(#)rules.cmd	1.14 13/07/22 
+#ident @(#)rules.cmd	1.17 18/08/14 
 ###########################################################################
 # Written 1996-2013 by J. Schilling
 ###########################################################################
@@ -39,7 +39,7 @@ _LD_OUTPUT_OPTION=	$(___LD_OUTPUT_OPTION:$(_UNIQ)%=%)
 
 LIBS_PATH += $(LIBS_PATH_STATIC)
 
-all:		$(PTARGET)
+all:		$(PTARGET) $(MAN)
 
 $(PTARGET):	$(OFILES) $(SRCLIBS)
 		$(LDCC) $(_LD_OUTPUT_OPTION) $(POFILES) $(LDFLAGS) $(LDLIBS)
@@ -52,4 +52,5 @@ include		$(SRCROOT)/$(RULESDIR)/rules.ins
 include		$(SRCROOT)/$(RULESDIR)/rules.tag
 include		$(SRCROOT)/$(RULESDIR)/rules.hlp
 include		$(SRCROOT)/$(RULESDIR)/rules.dep
+include		$(SRCROOT)/$(RULESDIR)/rules.cst
 ###########################################################################

@@ -1,4 +1,4 @@
-#ident "@(#)rules.sps	1.14 13/07/22 "
+#ident "@(#)rules.sps	1.16 18/08/16 "
 ###########################################################################
 # Written 2005-2013 by J. Schilling
 ###########################################################################
@@ -41,10 +41,10 @@ include		$(SRCROOT)/$(RULESDIR)/rules.tpk
 ###########################################################################
 
 all: $(ARCHDIR)/config.status $(POSTCONFIG)
-	cd $(ARCHDIR)/; $(MAKE) $(MAKEMACS) $(MAKEOPTS) $@
+	cd $(ARCHDIR)/; "$(MAKE)" $(MAKEMACS) $(MAKEOPTS) $@
 
 install: all
-	cd $(ARCHDIR)/; DESTDIR=$(DEST_DIR) $(MAKE) $(MAKEMACS) $(MAKEOPTS) DESTDIR=$(DEST_DIR) $@
+	cd $(ARCHDIR)/; DESTDIR=$(DEST_DIR) "$(MAKE)" $(MAKEMACS) $(MAKEOPTS) DESTDIR=$(DEST_DIR) $@
 
 #
 # Hack until the <mach>-<os>-*cc.rul files are updated
@@ -81,5 +81,5 @@ LNDIRPRG=	$(__LNDIR_PRG:$(_UNIQ)%=%)
 $(ARCHDIR)/config.status: $(_CONF_SCR:%=$(SRC_DIR)/%)
 	mkdir -p $(ARCHDIR)/; cd $(ARCHDIR)/; \
 	$(LNDIRPRG) ../../$(SRC_DIR)/; \
-	CC="$(XCC_COM)" CFLAGS="$(CFLAGS)" MAKE="$(MAKE)" $(MAKEMACS) $(PCONFSCRIPT) $(CONF_OPTS) && \
+	CC="$(XCC_COM)" CFLAGS="$(C_FLAGS) $(CFLAGS)" MAKE="$(MAKE)" $(MAKEMACS) $(PCONFSCRIPT) $(CONF_OPTS) && \
 	( [ ! -f config.status ] && touch config.status || : )

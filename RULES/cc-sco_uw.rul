@@ -1,6 +1,6 @@
-#ident "@(#)cc-sco_uw.rul	1.13 13/11/13 "
+#ident "@(#)cc-sco_uw.rul	1.19 18/08/16 "
 ###########################################################################
-# Written 1999-2013 by J. Schilling/Santa Cruz Operation
+# Written 1999-2018 by J. Schilling/Santa Cruz Operation
 ###########################################################################
 #
 # Platform dependent MACROS for SCO UnixWare 2.x / 7.x cc
@@ -21,8 +21,8 @@
 # file and include the License file CDDL.Schily.txt from this distribution.
 ###########################################################################
 
-CPPFLAGS=	-DSCHILY_BUILD $(CPPOPTS) $(CPPOPTX) $(OSINCDIRS:%=-I%) $(OSDEFS) $(OSDEFSX)
-CFLAGS=		$(COPTS) $(CWARNOPTS) $(COPTOPT) $(SCO_UWCOPTOPT) $(COPTX)
+CPP_FLAGS=	-DSCHILY_BUILD $(CPPOPTS) $(CPPOPTX) $(OSINCDIRS:%=-I%) $(OSDEFS) $(OSDEFSX)
+C_FLAGS=	$(COPTS) $(CWARNOPTS) $(COPTOPT) $(SCO_UWCOPTOPT) $(COPTX)
 C++FLAGS=	$(C++OPTS) $(C++WARNOPTS) $(C++OPTOPT) $(SCO_UWC++OPTOPT) $(C++OPTX)
 
 CPPOPTS=	-I$(ARCHDIR) -I$(OINCSDIR) $(INCDIRS:%=-I%) $(INCDIRSX:%=-I%)
@@ -40,7 +40,9 @@ C++WOPTS=
 
 LIB_PREFIX=	lib
 LIB_SUFFIX=	.a
-SHL_SUFFIX=	.so.1.0
+SHL_SUFFIX=	.so.$(DYNMAJOR).$(DYNMINOR)
+
+LIB_C=		-lc
 
 LIBS_PATH=	-L$(OLIBSDIR)
 LIBS_PATH_STATIC= -L$(OLIBSDIR_STATIC) 
@@ -64,6 +66,11 @@ CC++_COM=	$(___CC++_COM:$(_UNIQ)%=%)
 
 CC_COM_DEF=	cc
 CC++_COM_DEF=	echo "C++ not yet supported"; exit -1; :
+#
+# Use to comment out C++ projects
+#
+C++BUILD=	$(NUMBER_SIGN)
+
 CC=		$(CC_COM_DEF)
 CCC=		$(CC++_COM_DEF)
 

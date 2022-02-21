@@ -1,13 +1,13 @@
-/* @(#)idcache.c	1.29 09/11/16 Copyright 1993, 1995-2009 J. Schilling */
+/* @(#)idcache.c	1.32 18/05/20 Copyright 1993, 1995-2018 J. Schilling */
 #include <schily/mconfig.h>
 #ifndef lint
 static	UConst char sccsid[] =
-	"@(#)idcache.c	1.29 09/11/16 Copyright 1993, 1995-2009 J. Schilling";
+	"@(#)idcache.c	1.32 18/05/20 Copyright 1993, 1995-2018 J. Schilling";
 #endif
 /*
  *	UID/GID caching functions
  *
- *	Copyright (c) 1993, 1995-2009 J. Schilling
+ *	Copyright (c) 1993, 1995-2018 J. Schilling
  */
 /*
  * The contents of this file are subject to the terms of the
@@ -16,6 +16,8 @@ static	UConst char sccsid[] =
  * with the License.
  *
  * See the file CDDL.Schily.txt in this distribution for details.
+ * A copy of the CDDL is also available via the Internet at
+ * http://www.opensource.org/licenses/cddl1.txt
  *
  * When distributing Covered Code, include this CDDL HEADER in each
  * file and include the License file CDDL.Schily.txt from this distribution.
@@ -32,7 +34,7 @@ static	UConst char sccsid[] =
 #define	TUNMLEN	32			/* Max. UID name len (POSIX)	*/
 #define	TGNMLEN	32			/* Max. GID name len (POSIX)	*/
 
-#define	C_SIZE	16			/* Cache size (cachee is static) */
+#define	C_SIZE	16			/* Cache size (cache is static) */
 
 typedef struct u_id {
 	uid_t	uid;
@@ -63,6 +65,7 @@ EXPORT	BOOL 	ic_gidname	__PR((char *name, int namelen, gid_t *gidp));
 LOCAL	void	nameinit	__PR((void));
 EXPORT	uid_t	ic_uid_nobody	__PR((void));
 EXPORT	gid_t	ic_gid_nobody	__PR((void));
+LOCAL	BOOL	nameascii	__PR((char *name));
 
 /*
  * Get name from uid
@@ -83,8 +86,10 @@ ic_nameuid(name, namelen, uid)
 	register uidc_t	*idp;
 
 	for (i = 0, idp = uidcache; i < C_SIZE; i++, idp++) {
-		if (idp->valid == 0)		/* Entry not yet filled */
-			break;
+		if (idp->valid == 0) {		/* Entry not yet filled */
+			lastuidx = i;
+			goto fill;
+		}
 		if (idp->uid == uid)
 			goto out;
 	}
@@ -92,21 +97,20 @@ ic_nameuid(name, namelen, uid)
 	if (lastuidx >= C_SIZE)
 		lastuidx = 0;
 
+fill:
 	idp->uid = uid;
 	idp->name[0] = '\0';
 	idp->valid = 1;
 	if ((pw = getpwuid(uid)) != NULL) {
-		strncpy(idp->name, pw->pw_name, TUNMLEN);
-		idp->name[TUNMLEN] = '\0';
-		/*
-		 * XXX We should find a better method than shortening the cache
-		 */
-		if (namelen <= (TUNMLEN+1))
-			idp->name[namelen-1] = 0;
+		strlcpy(idp->name, pw->pw_name, sizeof (idp->name));
+		if (!nameascii(idp->name))
+			idp->valid = 3;		/* Mark name as non-ASCII */
 	}
 out:
-	strcpy(name, idp->name);
-	return (name[0] != '\0');
+	strlcpy(name, idp->name, namelen);
+	if (name[0] != '\0')
+		return (idp->valid);
+	return (FALSE);
 }
 
 /*
@@ -129,8 +133,10 @@ ic_uidname(name, namelen, uidp)
 	}
 
 	for (i = 0, idp = uidcache; i < C_SIZE; i++, idp++) {
-		if (idp->valid == 0)		/* Entry not yet filled */
-			break;
+		if (idp->valid == 0) {		/* Entry not yet filled */
+			lastuidx = i;
+			goto fill;
+		}
 		if (name[0] == idp->name[0] &&
 					strncmp(name, idp->name, len) == 0) {
 			*uidp = idp->uid;
@@ -145,14 +151,16 @@ ic_uidname(name, namelen, uidp)
 	if (lastuidx >= C_SIZE)
 		lastuidx = 0;
 
+fill:
 	idp->uid = 0;
 	idp->name[0] = '\0';
-	strncpy(idp->name, name, len);
-	idp->name[len] = '\0';
+	strlcpy(idp->name, name, len+1);	/* uidc_t.name is TUNMLEN+1 */
 	idp->valid = 1;
 	if ((pw = getpwnam(idp->name)) != NULL) {
 		idp->uid = pw->pw_uid;
 		*uidp = idp->uid;
+		if (!nameascii(idp->name))
+			idp->valid = 3;		/* Mark name as non-ASCII */
 		return (TRUE);
 	} else {
 		idp->valid = 2;			/* Mark name as not found */
@@ -180,8 +188,10 @@ ic_namegid(name, namelen, gid)
 	register gidc_t	*idp;
 
 	for (i = 0, idp = gidcache; i < C_SIZE; i++, idp++) {
-		if (idp->valid == 0)		/* Entry not yet filled */
-			break;
+		if (idp->valid == 0) {		/* Entry not yet filled */
+			lastgidx = i;
+			goto fill;
+		}
 		if (idp->gid == gid)
 			goto out;
 	}
@@ -189,21 +199,20 @@ ic_namegid(name, namelen, gid)
 	if (lastgidx >= C_SIZE)
 		lastgidx = 0;
 
+fill:
 	idp->gid = gid;
 	idp->name[0] = '\0';
 	idp->valid = 1;
 	if ((gr = getgrgid(gid)) != NULL) {
-		strncpy(idp->name, gr->gr_name, TGNMLEN);
-		idp->name[TGNMLEN] = '\0';
-		/*
-		 * XXX We should find a better method than shortening the cache
-		 */
-		if (namelen <= (TGNMLEN+1))
-			idp->name[namelen-1] = 0;
+		strlcpy(idp->name, gr->gr_name, sizeof (idp->name));
+		if (!nameascii(idp->name))
+			idp->valid = 3;		/* Mark name as non-ASCII */
 	}
 out:
-	strcpy(name, idp->name);
-	return (name[0] != '\0');
+	strlcpy(name, idp->name, namelen);
+	if (name[0] != '\0')
+		return (idp->valid);
+	return (FALSE);
 }
 
 /*
@@ -226,8 +235,10 @@ ic_gidname(name, namelen, gidp)
 	}
 
 	for (i = 0, idp = gidcache; i < C_SIZE; i++, idp++) {
-		if (idp->valid == 0)		/* Entry not yet filled */
-			break;
+		if (idp->valid == 0) {		/* Entry not yet filled */
+			lastgidx = i;
+			goto fill;
+		}
 		if (name[0] == idp->name[0] &&
 					strncmp(name, idp->name, len) == 0) {
 			*gidp = idp->gid;
@@ -242,14 +253,16 @@ ic_gidname(name, namelen, gidp)
 	if (lastgidx >= C_SIZE)
 		lastgidx = 0;
 
+fill:
 	idp->gid = 0;
 	idp->name[0] = '\0';
-	strncpy(idp->name, name, len);
-	idp->name[len] = '\0';
+	strlcpy(idp->name, name, len+1);	/* gidc_t.name is TGNMLEN+1 */
 	idp->valid = 1;
 	if ((gr = getgrnam(idp->name)) != NULL) {
 		idp->gid = gr->gr_gid;
 		*gidp = idp->gid;
+		if (!nameascii(idp->name))
+			idp->valid = 3;		/* Mark name as non-ASCII */
 		return (TRUE);
 	} else {
 		idp->valid = 2;			/* Mark name as not found */
@@ -305,4 +318,16 @@ ic_gid_nobody()
 	if (!name_init)
 		nameinit();
 	return (_gid_nobody);
+}
+
+LOCAL BOOL
+nameascii(name)
+	register char	*name;
+{
+	register unsigned char	c;
+	while ((c = (unsigned char)*name++) != '\0') {
+		if (c > 127)
+			return (FALSE);
+	}
+	return (TRUE);
 }

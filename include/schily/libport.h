@@ -1,9 +1,9 @@
-/* @(#)libport.h	1.43 14/05/11 Copyright 1995-2014 J. Schilling */
+/* @(#)libport.h	1.49 18/07/23 Copyright 1995-2018 J. Schilling */
 /*
  *	Prototypes for POSIX standard functions that may be missing on the
  *	local platform and thus are implemented inside libschily.
  *
- *	Copyright (c) 1995-2014 J. Schilling
+ *	Copyright (c) 1995-2018 J. Schilling
  */
 /*
  * The contents of this file are subject to the terms of the
@@ -61,13 +61,21 @@ extern "C" {
 
 #ifdef	FOUND_SIZE_T
 /*
- * We currently cannot define this here because there IXIX has a definition
+ * We currently cannot define this here because there IRIX has a definition
  * than violates the standard.
  */
 #ifndef	HAVE_SNPRINTF
 /*PRINTFLIKE3*/
 extern	int	snprintf __PR((char *, size_t, const char *, ...))
 					__printflike__(3, 4);
+#endif
+#endif
+
+#ifdef	EOF		/* stdio.h has been included */
+#ifdef	FOUND_SIZE_T
+#ifndef	HAVE_GETDELIM
+extern	ssize_t	getdelim	__PR((char **, size_t *, int, FILE *));
+#endif
 #endif
 #endif
 
@@ -205,8 +213,8 @@ extern	wchar_t		*wcsstr		__PR((const wchar_t *s1,
 #endif	/* _SCHILY_WCHAR_H */
 
 #ifndef	HAVE_RENAME
-extern	int		rename		__PR((const char *old,
-							const char *new));
+extern	int		rename		__PR((const char *__old,
+							const char *__new));
 #endif
 
 /*
@@ -295,6 +303,9 @@ extern	void		endgrent __PR((void));
 extern	int		fchdir __PR((int fd));
 #endif
 #ifndef	HAVE_OPENAT
+#if	defined(HAVE_LARGEFILES)
+#	define	openat		openat64
+#endif
 extern	int		openat __PR((int fd, const char *name, int oflag, ...));
 #endif
 
@@ -330,6 +341,9 @@ extern	DIR		*fdopendir __PR((int fd));
 
 #ifdef	_SCHILY_STAT_H
 #ifndef	HAVE_FSTATAT
+#if	defined(HAVE_LARGEFILES)
+#	define	fstatat		fstatat64
+#endif
 extern	int		fstatat __PR((int fd, const char *name,
 					struct stat *sbuf, int flag));
 #endif
@@ -370,8 +384,8 @@ extern	ssize_t		readlinkat __PR((int fd, const char *name,
 					char *lbuf, size_t lbufsize));
 #endif
 #ifndef	HAVE_RENAMEAT
-extern	int		renameat __PR((int oldfd, const char *old,
-					int newfd, const char *new));
+extern	int		renameat __PR((int oldfd, const char *__old,
+					int newfd, const char *__new));
 #endif
 #ifndef	HAVE_SYMLINKAT
 extern	int		symlinkat __PR((const char *content,
@@ -391,6 +405,21 @@ extern	int		utimensat __PR((int fd, const char *name,
 					int flag));
 #endif
 #endif	/* _SCHILY_TIME_H */
+
+#ifndef	HAVE_PUTENV
+extern	int		putenv		__PR((char *new));
+#endif
+#ifndef	HAVE_UNSETENV
+extern	int		unsetenv	__PR((const char *name));
+#endif
+
+#ifndef	HAVE_WAITID
+#ifdef	_SCHILY_WAIT_H
+#define	waitid		js_waitid
+extern	int		waitid		__PR((idtype_t idtype, id_t id,
+						siginfo_t *infop, int opts));
+#endif
+#endif
 
 #ifdef	__SUNOS4
 /*

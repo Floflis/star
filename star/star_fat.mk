@@ -1,4 +1,4 @@
-#ident @(#)star_fat.mk	1.23 08/04/06 
+#ident @(#)star_fat.mk	1.28 18/06/08 
 ###########################################################################
 #include		$(MAKE_M_ARCH).def
 SRCROOT=	..
@@ -17,17 +17,22 @@ TARGET=		star
 #SYMLINKS=	ustar tar
 SYMLINKS=	ustar tar gnutar suntar scpio spax
 CPPOPTS +=	-D__STAR__
-CPPOPTS +=	-DSET_CTIME -DFIFO -DUSE_MMAP -DUSE_REMOTE -DUSE_RCMD_RSH
-#CPPOPTS +=	-DSET_CTIME -DFIFO -DUSE_MMAP
-#CPPOPTS +=	-DSET_CTIME -DUSE_MMAP
-#CPPOPTS +=	-DFIFO -DUSE_MMAP
-CPPOPTS +=	-DUSE_LARGEFILES
-CPPOPTS +=	-DUSE_FIND
-CPPOPTS +=	-DUSE_ACL
-CPPOPTS +=	-DUSE_XATTR
-CPPOPTS +=	-DUSE_FFLAGS
-CPPOPTS +=	-DCOPY_LINKS_DELAYED
-CPPOPTS +=	-DSTAR_FAT
+CPPOPTS +=	-DSET_CTIME		# Include timestorm code to set ctime
+CPPOPTS +=	-DFIFO			# Include FIFO code
+CPPOPTS +=	-DUSE_SSH		# Use "ssh" by default instead of "rsh"
+CPPOPTS +=	-DUSE_MMAP		# Use mmap() for the FIFO
+CPPOPTS +=	-DUSE_REMOTE		# Add support for the rmt protocol
+CPPOPTS +=	-DUSE_RCMD_RSH		# Add fast support for rcmd()
+CPPOPTS +=	-DUSE_LARGEFILES	# Support files > 2 GB
+CPPOPTS +=	-DUSE_FIND		# Include support for libfind
+CPPOPTS +=	-DUSE_ACL		# Support file ACLs
+CPPOPTS +=	-DUSE_XATTR		# Support (currently Linux) xattr
+CPPOPTS +=	-DUSE_FFLAGS		# Support BSD style file flags
+CPPOPTS +=	-DCOPY_LINKS_DELAYED	# Delayed copy of hard/symlinks
+CPPOPTS +=	-DSTAR_FAT		# One binary for all CLI's
+CPPOPTS +=	-DUSE_ICONV		# Use iconv() for pax filenames
+CPPOPTS +=	-DUSE_NLS		# Include locale support
+CPPOPTS +=	-DTEXT_DOMAIN=\"SCHILY_utils\"
 CPPOPTS +=	-DSCHILY_PRINT
 CFILES=		star_fat.c header.c cpiohdr.c xheader.c xattr.c \
 		list.c extract.c create.c append.c diff.c restore.c \
@@ -38,21 +43,24 @@ CFILES=		star_fat.c header.c cpiohdr.c xheader.c xattr.c \
 		unicode.c \
 		subst.c volhdr.c \
 		chdir.c match.c defaults.c dumpdate.c \
-		fifo.c device.c checkerr.c \
+		fifo.c device.c checkerr.c paxopts.c \
 		\
-		findinfo.c
+		findinfo.c pathname.c
 
 HFILES=		star.h starsubs.h dirtime.h xtab.h xutimes.h \
 		movearch.h table.h props.h fifo.h diff.h restore.h \
-		checkerr.h dumpdate.h bitstring.h
+		checkerr.h dumpdate.h bitstring.h pathname.h
 
 #LIBS=		-lunos
 #LIBS=		-lschily -lc /usr/local/lib/gcc-gnulib
-LIBS=		-ldeflt -lrmt -lfind -lschily $(LIB_ACL) $(LIB_ATTR) $(LIB_SOCKET) $(LIB_INTL)
+#
+# LIB_CAP is needed for Linux capability support in librmt.
+#
+LIBS=		-ldeflt -lrmt -lfind -lschily $(LIB_ACL) $(LIB_ATTR) $(LIB_SOCKET) $(LIB_ICONV) $(LIB_INTL) $(LIB_CAP)
 #
 #	Wenn -lfind, dann auch  $(LIB_INTL)
 #
-XMK_FILE=	Makefile.man starformatman.mk scpioman.mk gnutarman.mk \
+XMK_FILE=	Makefile.man ustarman.mk starformatman.mk scpioman.mk gnutarman.mk \
 		spaxman.mk suntarman.mk Makefile.dfl Makefile.doc
 
 star_fat.c: star.c
@@ -60,6 +68,7 @@ star_fat.c: star.c
 
 ###########################################################################
 include		$(SRCROOT)/$(RULESDIR)/rules.cmd
+include		$(SRCROOT)/$(RULESDIR)/rules.tst
 ###########################################################################
 count:	$(CFILES) $(HFILES)
 	count $r1

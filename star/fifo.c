@@ -1,8 +1,8 @@
-/* @(#)fifo.c	1.78 13/04/29 Copyright 1989, 1994-2013 J. Schilling */
+/* @(#)fifo.c	1.100 19/03/02 Copyright 1989, 1994-2019 J. Schilling */
 #include <schily/mconfig.h>
 #ifndef lint
 static	UConst char sccsid[] =
-	"@(#)fifo.c	1.78 13/04/29 Copyright 1989, 1994-2013 J. Schilling";
+	"@(#)fifo.c	1.100 19/03/02 Copyright 1989, 1994-2019 J. Schilling";
 #endif
 /*
  *	A "fifo" that uses shared memory between two processes
@@ -19,7 +19,16 @@ static	UConst char sccsid[] =
  *		N	fifo_chotape()	wake up get side if mp->oblocked == TRUE
  *		R	fifo_reelwake() wake up put side if mp->reelwait == TRUE
  *
- *	Copyright (c) 1989, 1994-2013 J. Schilling
+ *	If you ever see a hang in the fifo code, you need to report a stack
+ *	trace for both processes (including the line number of the hanging call
+ *	to swait()) and the relevant state of struct m_head.
+ *
+ *	This can be done by sending SIGRTMAX to both star processes via:
+ *		kill -RTMAX <pid1>
+ *		kill -RTMAX <pid2>
+ *	and then to report the output (from stderr).
+ *
+ *	Copyright (c) 1989, 1994-2019 J. Schilling
  */
 /*
  * The contents of this file are subject to the terms of the
@@ -28,6 +37,8 @@ static	UConst char sccsid[] =
  * with the License.
  *
  * See the file CDDL.Schily.txt in this distribution for details.
+ * A copy of the CDDL is also available via the Internet at
+ * http://www.opensource.org/licenses/cddl1.txt
  *
  * When distributing Covered Code, include this CDDL HEADER in each
  * file and include the License file CDDL.Schily.txt from this distribution.
@@ -37,13 +48,16 @@ static	UConst char sccsid[] =
 #include <schily/stdlib.h>
 #include <schily/unistd.h>	/* includes <sys/types.h> */
 #include <schily/fcntl.h>
+#include <schily/signal.h>
 #include <schily/standard.h>
 #include <schily/errno.h>
 
 #ifdef	FIFO
 
 #if !defined(USE_MMAP) && !defined(USE_USGSHM)
+#ifdef	HAVE_SMMAP
 #define	USE_MMAP
+#endif
 #endif
 #if defined(HAVE_SMMAP) && defined(USE_MMAP)
 #include <schily/mman.h>
@@ -51,35 +65,47 @@ static	UConst char sccsid[] =
 #include "star.h"
 #include "starsubs.h"
 #include "fifo.h"	/* #undef FIFO may happen here */
+#define	GT_COMERR		/* #define comerr gtcomerr */
+#define	GT_ERROR		/* #define error gterror   */
 #include <schily/schily.h>
 #include <schily/libport.h>	/* getpagesize() */
 
 #ifndef	HAVE_SMMAP
-#	undef	USE_MMAP
-#	define	USE_USGSHM	/* SYSV shared memory is the default */
+#undef	USE_MMAP
+#ifdef	FIFO
+#define	USE_USGSHM	/* SYSV shared memory is the default */
+#endif
 #endif
 
 #ifdef	HAVE_DOSALLOCSHAREDMEM	/* This is for OS/2 */
-#	undef	USE_MMAP
-#	undef	USE_USGSHM
-#	define	USE_OS2SHM
+#undef	USE_MMAP
+#undef	USE_USGSHM
+#ifdef	FIFO
+#define	USE_OS2SHM
+#endif
 #endif
 
 #ifdef	HAVE_BEOS_AREAS		/* This is for BeOS/Zeta */
-#	undef	USE_MMAP
-#	undef	USE_USGSHM
-#	undef	USE_OS2SHM
-#	define	USE_BEOS_AREAS
+#undef	USE_MMAP
+#undef	USE_USGSHM
+#undef	USE_OS2SHM
+#ifdef	FIFO
+#define	USE_BEOS_AREAS
+#endif
 #endif
 
+#define	HANG_DEBUG
 #ifdef DEBUG
+#ifndef	HANG_DEBUG
+#define	HANG_DEBUG
+#endif
 #define	EDEBUG(a)	if (debug) error a
 #else
 #define	EDEBUG(a)
 #endif
 
 	/*
-	 * roundup(x, y), x needs to be unsigned or x+y non-genative.
+	 * roundup(x, y), x needs to be unsigned or x+y non-negative.
 	 */
 #undef	roundup
 #define	roundup(x, y)	((((x)+((y)-1))/(y))*(y))
@@ -112,18 +138,21 @@ long	obs;
 int	hiw;
 int	low;
 
+LOCAL	int	waitchan;
+
 EXPORT	void	initfifo	__PR((void));
 LOCAL	void	fifo_setparams	__PR((void));
 EXPORT	void	fifo_ibs_shrink	__PR((int newsize));
 EXPORT	void	runfifo		__PR((int ac, char *const *av));
-LOCAL	void	prmp		__PR((void));
+EXPORT	void	fifo_prmp	__PR((int sig));
 EXPORT	void	fifo_stats	__PR((void));
-LOCAL	int	swait		__PR((int f));
+LOCAL	int	swait		__PR((int f, int chan));
 LOCAL	int	swakeup		__PR((int f, int c));
 EXPORT	int	fifo_amount	__PR((void));
 EXPORT	int	fifo_iwait	__PR((int amount));
 EXPORT	void	fifo_owake	__PR((int amount));
 EXPORT	void	fifo_oflush	__PR((void));
+EXPORT	void	fifo_oclose	__PR((void));
 EXPORT	int	fifo_owait	__PR((int amount));
 EXPORT	void	fifo_iwake	__PR((int amt));
 EXPORT	void	fifo_reelwake	__PR((void));
@@ -148,6 +177,12 @@ LOCAL	char	*mkbeosshm	__PR((int size));
 LOCAL	void	beosshm_child	__PR((void));
 #endif
 
+/*
+ * Initialize the FIFO.
+ *
+ * This is called from the buffer administration at start up time.
+ * It just allocates the FIFO buffer and initializes the data structures.
+ */
 EXPORT void
 initfifo()
 {
@@ -235,6 +270,10 @@ extern	BOOL	cflag;
 	buf = mkbeosshm(buflen);
 #endif
 #endif
+	if (buf == NULL) {
+		comerrno(EX_BAD,
+			"Cannot get shared memory, fifo missconfigured?\n");
+	}
 	mp = (m_head *)buf;
 	fillbytes(buf, addsize, '\0');	/* We init the complete add. space */
 	stats = &mp->stats;
@@ -257,7 +296,8 @@ extern	BOOL	cflag;
 		 */
 		mp->bmlast = (fs/TBLOCK) - 1;
 		mp->rsize -= bitstr_size(fs/TBLOCK);
-		mp->bmap  = (bitstr_t *)(((char *)(&(&mp->ginfo)[1])) + mp->rsize);
+		mp->bmap  = (bitstr_t *)
+				(((char *)(&(&mp->ginfo)[1])) + mp->rsize);
 	}
 	gip = &mp->ginfo;
 
@@ -271,7 +311,7 @@ extern	BOOL	cflag;
 #ifdef	F_SETFD
 	/*
 	 * Set close on exec() flag so the compress program
-	 * or other programs will not inherit out pipes.
+	 * or other programs will not inherit our pipes.
 	 */
 	fcntl(mp->gp[0], F_SETFD, FD_CLOEXEC);
 	fcntl(mp->gp[1], F_SETFD, FD_CLOEXEC);
@@ -280,7 +320,7 @@ extern	BOOL	cflag;
 #endif
 
 	mp->putptr = mp->getptr = mp->base;
-	prmp();
+	fifo_prmp(0);
 	{
 		/* Temporary until all modules know about mp->xxx */
 		extern int	bufsize;
@@ -290,6 +330,12 @@ extern	BOOL	cflag;
 		bufsize = mp->size;
 		bigptr = bigbuf = mp->base;
 	}
+#ifdef	HANG_DEBUG
+#ifdef	SIGRTMAX
+	if (signal(SIGRTMAX, SIG_IGN) != SIG_IGN)
+		set_signal(SIGRTMAX, fifo_prmp);
+#endif
+#endif
 }
 
 LOCAL void
@@ -335,6 +381,8 @@ fifo_ibs_shrink(newsize)
 }
 
 /*
+ * fork() and run FIFO background process in forked child.
+ *
  * Der eigentliche star Prozess ist immer im Vordergrund.
  * Der Band Prozess ist immer im Hintergrund.
  *
@@ -352,6 +400,8 @@ runfifo(ac, av)
 {
 	extern	BOOL	cflag;
 
+	signal(SIGPIPE, SIG_IGN);
+
 	if ((pid = fork()) < 0)
 		comerr("Cannot fork.\n");
 
@@ -367,13 +417,13 @@ runfifo(ac, av)
 	if ((pid != 0) ^ cflag) {
 		EDEBUG(("Get prozess: cflag: %d pid: %d\n", cflag, pid));
 		/* Get Prozess */
-		close(mp->gpout);
-		close(mp->ppin);
+		(void) close(mp->gpout);
+		(void) close(mp->ppin);
 	} else {
 		EDEBUG(("Put prozess: cflag: %d pid: %d\n", cflag, pid));
 		/* Put Prozess */
-		close(mp->gpin);
-		close(mp->ppout);
+		(void) close(mp->gpin);
+		(void) close(mp->ppout);
 	}
 
 	if (pid == 0) {
@@ -386,10 +436,16 @@ runfifo(ac, av)
 
 			copy_create(ac, av);
 		} else if (cflag) {	/* In create mode .... */
+			/*
+			 * FIFO -> Tape (Get side)
+			 */
 			mp->ibs = mp->size;
 			mp->obs = bs;
 			do_out();	/* Write archive in background */
 		} else {
+			/*
+			 * Tape -> FIFO (Put side)
+			 */
 			mp->flags |= FIFO_IWAIT;
 			mp->ibs = bs;
 			mp->obs = mp->size;
@@ -398,8 +454,9 @@ runfifo(ac, av)
 #ifdef	USE_OS2SHM
 		DosFreeMem(buf);
 #ifdef	__needed__
-		sleep(30000);	/* XXX If calling _exit() here the parent process seems to be blocked */
-				/* XXX This should be fixed soon */
+		sleep(30000);	/* XXX If calling _exit() here the parent */
+				/* XXX process seems to be blocked.	  */
+				/* XXX This should be fixed soon.	  */
 #endif
 #endif
 		exit(0);
@@ -416,32 +473,55 @@ runfifo(ac, av)
 	}
 }
 
-LOCAL void
-prmp()
+EXPORT void
+fifo_prmp(sig)
+	int	sig;
 {
-#ifdef	DEBUG
-	if (!debug)
+#ifdef	HANG_DEBUG
+extern	BOOL	cflag;
+
+	if (sig == 0 && !debug)
 		return;
+
+	error("pid:      %ld (%ld) copy %d cflag %d\n",
+					(long)getpid(), (long)pid,
+					copyflag, cflag);
+	error("waitchan: %d\n", waitchan);
+	error("putptr:   %p\n", mp->putptr);
+	error("getptr:   %p\n", mp->getptr);
+	error("base:     %p\n", mp->base);
+	error("end:      %p\n", mp->end);
+	error("size:     %d\n", mp->size);
+	error("ibs:      %d\n", mp->ibs);
+	error("obs:      %d\n", mp->obs);
+	error("amt:      %ld\n", FIFO_AMOUNT(mp));
+	error("icnt:     %ld\n", mp->icnt);
+	error("ocnt:     %ld\n", mp->ocnt);
+	error("iblocked: %d\n", mp->iblocked);
+	error("oblocked: %d\n", mp->oblocked);
+	error("m1:       %d\n", mp->m1);
+	error("m2:       %d\n", mp->m2);
+	error("chreel:   %d\n", mp->chreel);
+	error("reelwait: %d\n", mp->reelwait);
+	error("eflags:   %2.2X\n", mp->eflags);
+	error("pflags:   %2.2X\n", mp->pflags);
+	error("flags:    %2.2X\n", mp->flags);
+	error("hiw:      %d\n", mp->hiw);
+	error("low:      %d\n", mp->low);
+	error("puts:     %d\n", mp->puts);
+	error("gets:     %d\n", mp->gets);
+	error("empty:    %d\n", mp->empty);
+	error("full:     %d\n", mp->full);
+	error("maxfill:  %d\n", mp->maxfill);
+	error("moves:    %d\n", mp->moves);
+	error("mbytes:   %lld\n", mp->mbytes);
 #ifdef	TEST
-	error("putptr: %p\n", mp->putptr);
-	error("getptr: %p\n", mp->getptr);
+	error("wpin:     %d\n", mp->wpin);
+	error("wpout:    %d\n", mp->wpout);
+	error("rpin:     %d\n", mp->rpin);
+	error("rpout:    %d\n", mp->rpout);
 #endif
-	error("base:  %p\n", mp->base);
-	error("end:   %p\n", mp->end);
-	error("size:  %d\n", mp->size);
-	error("ibs:   %d\n", mp->ibs);
-	error("obs:   %d\n", mp->obs);
-	error("amt:   %ld\n", FIFO_AMOUNT(mp));
-	error("hiw:   %d\n", mp->hiw);
-	error("low:   %d\n", mp->low);
-	error("flags: %X\n", mp->flags);
-#ifdef	TEST
-	error("wpin:  %d\n", mp->wpin);
-	error("wpout: %d\n", mp->wpout);
-	error("rpin:  %d\n", mp->rpin);
-	error("rpout: %d\n", mp->rpout);
-#endif
-#endif	/* DEBUG */
+#endif	/* HANG_DEBUG */
 }
 
 EXPORT void
@@ -460,7 +540,9 @@ fifo_stats()
 			"fifo had %d moves, total of %lld moved bytes\n",
 						mp->moves, mp->mbytes);
 	}
-	if ((mp->flags & (FIFO_MEOF|FIFO_EXIT)) == 0 || FIFO_AMOUNT(mp) > 0) {
+	if (((mp->pflags & FIFO_MEOF) == 0 &&
+	    (mp->eflags & FIFO_EXIT) == 0) ||
+	    FIFO_AMOUNT(mp) > 0) {
 		errmsgno(EX_BAD, "fifo is %lld%% full (%luk), size %dk.\n",
 				(Llong)FIFO_AMOUNT(mp) * (Llong)100 / mp->size,
 				FIFO_AMOUNT(mp)/1024, mp->size/1024);
@@ -472,34 +554,76 @@ fifo_stats()
  * Semaphore wait
  */
 LOCAL int
-swait(f)
+swait(f, chan)
 	int	f;
+	int	chan;
 {
 		int	ret;
-	unsigned char	c;
+		int	err = 0;
+	unsigned char	c = 0;
 
+	waitchan = chan;
 	seterrno(0);
 	do {
 		ret = read(f, &c, 1);
 	} while (ret < 0 && geterrno() == EINTR);
-	if (ret < 0 || (ret == 0 && pid)) {
+	waitchan = 0;
+	if (ret < 0)
+		err = geterrno();
+
+	if ((mp->pflags & FIFO_MEOF) && (ret == 0)) {
+		/*
+		 * We come here in case that the other process that should send
+		 * a wakeup died without sending the wakeup because a context
+		 * switch on the waiting process (us) prevented us to set the
+		 * wait flag in time. This is not a problem since we wake up
+		 * from the EOF condition on the sync pipe. We behave as if we
+		 * received a normal wakeup byte.
+		 */
+#ifdef	FIFO_EOF_DEBUG
+extern	BOOL	cflag;
+		errmsg("Emulate received EOF wakeup on %s side.\n",
+			((pid != 0) ^ cflag)? "get": "put");
+#endif
+		return ((int)c);
+	}
+	if (ret <= 0) {
 		/*
 		 * If pid != 0, this is the foreground process
 		 */
-		if ((mp->flags & FIFO_EXIT) == 0)
-			errmsg("Sync pipe read error on pid %d flags 0x%X.\n", pid, mp->flags);
-		if ((mp->flags & FIFO_EXERRNO) != 0)
+		if (ret < 0 || (mp->eflags & FIFO_EXIT) == 0) {
+			errmsg(
+			"Sync pipe read error pid %d ret %d\n",
+				pid, ret);
+			errmsg("Ib %d Ob %d e %X p %X g %X chan %d.\n",
+				mp->iblocked, mp->oblocked,
+				mp->eflags, mp->pflags, mp->flags,
+				chan);
+		}
+		if ((mp->eflags & FIFO_EXERRNO) != 0) {
+			/*
+			 * A previous error was seen, keep it.
+			 */
 			ret = mp->ferrno;
-		else
-			ret = 1;
+		} else {
+			/*
+			 * Recent sync pipe read error.
+			 * Signal error to forground process.
+			 */
+			mp->eflags |= FIFO_EXERRNO;
+			if (ret == 0) {
+				errmsgno(err,
+					"Sync pipe EOF error pid %d ret %d\n",
+					pid, ret);
+			}
+			if (err)
+				ret = err;
+			else
+				ret = EX_BAD;
+			mp->ferrno = ret;
+		}
 		exprstats(ret);
 		/* NOTREACHED */
-	}
-	if (ret == 0) {
-		/*
-		 * this is the background process!
-		 */
-		exit(0);
 	}
 	return ((int)c);
 }
@@ -515,12 +639,15 @@ swakeup(f, c)
 	return (write(f, &c, 1));
 }
 
-#define	sgetwait(m)		swait((m)->gpin)
+#define	sgetwait(m, w)		swait((m)->gpin, w)
 #define	sgetwakeup(m, c)	swakeup((m)->gpout, (c))
 
-#define	sputwait(m)		swait((m)->ppin)
+#define	sputwait(m, w)		swait((m)->ppin, w)
 #define	sputwakeup(m, c)	swakeup((m)->ppout, (c))
 
+/*
+ * Return the amount of data from the FIFO available to the reader process.
+ */
 EXPORT int
 fifo_amount()
 {
@@ -529,7 +656,12 @@ fifo_amount()
 
 
 /*
- * wait until at least amount bytes may be put into the fifo
+ * Data -> FIFO (Put side)
+ *
+ * wait until at least amount bytes may be put into the fifo.
+ *
+ * If we are in "-c reate" mode, it is used by the tar process that reads files
+ * If we are in "-x tract" mode, it is used by the process that reads the tape
  */
 EXPORT int
 fifo_iwait(amount)
@@ -541,12 +673,16 @@ fifo_iwait(amount)
 	if (rmp->chreel) {	/* Block FIFO to allow to change reel */
 		EDEBUG(("C"));
 		rmp->reelwait = TRUE;
-		sputwait(rmp);
+		sputwait(rmp, 1);
 	}
-	if (rmp->flags & FIFO_MEOF) {
+	if (rmp->pflags & FIFO_MEOF) {
 		EDEBUG(("E"));
-		cnt = sputwait(rmp);
-		if (cnt != 'n') {
+		cnt = sputwait(rmp, 2);
+		/*
+		 * 'n' is from fifo_chitape(), '\0' is the final FIFO shutdown.
+		 */
+		if (cnt != 'n' &&
+		    !((rmp->eflags & FIFO_EXIT) && cnt == '\0')) {
 			errmsgno(EX_BAD,
 			"Implementation botch: with FIFO_MEOF\n");
 			comerrno(EX_BAD,
@@ -556,7 +692,7 @@ fifo_iwait(amount)
 		if (rmp->flags & FIFO_I_CHREEL) {
 			changetape(TRUE);
 			rmp->flags &= ~FIFO_I_CHREEL;
-			rmp->flags &= ~FIFO_MEOF;
+			rmp->pflags &= ~FIFO_MEOF;
 			EDEBUG(("t"));
 			sgetwakeup(rmp, 't');
 		} else {
@@ -571,7 +707,7 @@ fifo_iwait(amount)
 		rmp->full++;
 		rmp->iblocked = TRUE;
 		EDEBUG(("i"));
-		sputwait(rmp);
+		sputwait(rmp, 3);
 	}
 	if (cnt > rmp->ibs)
 		cnt = rmp->ibs;
@@ -591,6 +727,8 @@ fifo_iwait(amount)
 
 
 /*
+ * Data -> FIFO (Put side)
+ *
  * add amount bytes to putcount and wake up get side if necessary
  */
 EXPORT void
@@ -610,13 +748,17 @@ fifo_owake(amount)
 	if (rmp->oblocked &&
 			((rmp->flags & FIFO_IWAIT) ||
 					(FIFO_AMOUNT(rmp) >= rmp->low))) {
+		/*
+		 * Reset oblocked to make sure we send just one single
+		 * weakup event
+		 */
 		rmp->oblocked = FALSE;
 		EDEBUG(("d"));
 		sgetwakeup(rmp, 'd');
 	}
 	if ((rmp->flags & FIFO_IWAIT)) {
 		EDEBUG(("I"));
-		sputwait(rmp);
+		sputwait(rmp, 4);
 		/*
 		 * Set up shadow properties for this proc.
 		 */
@@ -626,21 +768,51 @@ fifo_owake(amount)
 
 
 /*
+ * Data -> FIFO (Put side)
+ *
  * send EOF condition to get side
  */
 EXPORT void
 fifo_oflush()
 {
-	mp->flags |= FIFO_MEOF;
+	mp->pflags |= FIFO_MEOF;
 	if (mp->oblocked) {
+		/*
+		 * Reset oblocked to make sure we send just one single
+		 * weakup event
+		 */
 		mp->oblocked = FALSE;
 		EDEBUG(("e"));
 		sgetwakeup(mp, 'e');
 	}
 }
 
+
 /*
+ * Data -> FIFO (Put side)
+ *
+ * final close of sync pipe
+ */
+EXPORT void
+fifo_oclose()
+{
+	/*
+	 * Close the pipe that is used to wakeup the Get side that might be
+	 * waiting but we did not notice that mp->oblocked was set because
+	 * it happened too late for us.
+	 * Closing the pipe is an alternate way to wake up the Get side.
+	 */
+	fifo_exit(0);
+}
+
+
+/*
+ * FIFO -> Data (Get side)
+ *
  * wait until at least obs bytes may be taken out of fifo
+ *
+ * If we are in "-c reate" mode, it is used by the process that writes the tape
+ * If we are in "-x tract" mode, it is used by the tar process that writes files
  */
 EXPORT int
 fifo_owait(amount)
@@ -651,24 +823,53 @@ fifo_owait(amount)
 	register m_head *rmp = mp;
 
 again:
-	cnt = FIFO_AMOUNT(rmp);
-	if (cnt == 0 && (rmp->flags & FIFO_MEOF))
-		return (cnt);
-
-	if (cnt < amount && (rmp->flags & (FIFO_MEOF|FIFO_O_CHREEL)) == 0) {
-		rmp->empty++;
-		rmp->oblocked = TRUE;
-		EDEBUG(("o"));
-		c = sgetwait(rmp);
+	/*
+	 * We need to check rmp->pflags & FIFO_MEOF first, because FIFO_AMOUNT()
+	 * gets updated before FIFO_MEOF.
+	 * If we did first check FIFO_AMOUNT(), we could get 0 and a context
+	 * switch after that and after being continued we could get FIFO_MEOF,
+	 * failing to notice that there was a content update meanwhile.
+	 */
+	if (rmp->pflags & FIFO_MEOF) {
 		cnt = FIFO_AMOUNT(rmp);
+		if (cnt == 0) {
+			return (cnt);
+		}
 	}
-	if (cnt == 0 && (rmp->flags & FIFO_O_CHREEL)) {
-		changetape(TRUE);
-		rmp->flags &= ~FIFO_O_CHREEL;
-		EDEBUG(("T"));
-		sputwakeup(mp, 'T');
-		goto again;
+
+	/*
+	 * We need to check rmp->pflags & FIFO_MEOF first, because FIFO_AMOUNT()
+	 * gets updated before FIFO_MEOF.
+	 */
+	if ((rmp->pflags & (FIFO_MEOF|FIFO_O_CHREEL)) == 0) {
+		cnt = FIFO_AMOUNT(rmp);
+		if (cnt < amount) {
+			/*
+			 * If a context switch happens here, we may get a EOF
+			 * condition while reading from the sync pipe because
+			 * the other process did already fill up the last chunk
+			 * into the FIFO and called exit(). There may be no way
+			 * to detect that we expect a wakeup as rmp->oblocked
+			 * may be set after the Put process exited.
+			 */
+			rmp->empty++;
+			rmp->oblocked = TRUE;
+			EDEBUG(("o"));
+			c = sgetwait(rmp, 5);
+		}
 	}
+
+	if (rmp->pflags & FIFO_O_CHREEL) {
+		cnt = FIFO_AMOUNT(rmp);
+		if (cnt == 0) {
+			changetape(TRUE);
+			rmp->pflags &= ~FIFO_O_CHREEL;
+			EDEBUG(("T"));
+			sputwakeup(mp, 'T');
+			goto again;
+		}
+	}
+	cnt = FIFO_AMOUNT(rmp);
 
 	if (rmp->maxfill < cnt)
 		rmp->maxfill = cnt;
@@ -676,7 +877,7 @@ again:
 	if (cnt > rmp->obs)
 		cnt = rmp->obs;
 
-	c = rmp->end - rmp->getptr;
+	c = rmp->end - rmp->getptr;	/* Compute max. contig. content */
 #ifdef	CPIO_ONLY
 	if (c < TBLOCK && c < cnt) {	/* XXX Check for c < amount too? */
 #else
@@ -699,6 +900,11 @@ again:
 		rmp->getptr = p;
 		c = rmp->end - rmp->getptr;
 	}
+	/*
+	 * If there is more data in the FIFO than from the get ptr to the end
+	 * of the FIFO and this is still more than the requested data, reduce
+	 * "cnt" to what can be read in a single transfer.
+	 */
 	if (cnt > c && c >= amount)
 		cnt = c;
 
@@ -718,6 +924,8 @@ again:
 
 
 /*
+ * FIFO -> Data (Get side)
+ *
  * add amount bytes to getcount and wake up put side if necessary
  */
 EXPORT void
@@ -738,7 +946,11 @@ fifo_iwake(amt)
 	if (rmp->getptr >= rmp->end)
 		rmp->getptr = rmp->base;
 
-	if ((FIFO_AMOUNT(rmp) <= rmp->hiw) && rmp->iblocked) {
+	if (rmp->iblocked && (FIFO_AMOUNT(rmp) <= rmp->hiw)) {
+		/*
+		 * Reset iblocked to make sure we send just one single
+		 * weakup event
+		 */
 		rmp->iblocked = FALSE;
 		EDEBUG(("s"));
 		sputwakeup(rmp, 's');
@@ -746,6 +958,8 @@ fifo_iwake(amt)
 }
 
 /*
+ * FIFO -> Data (Get side)
+ *
  * Wake up the put side in case it is wating on rmp->reelwait
  */
 EXPORT void
@@ -754,12 +968,21 @@ fifo_reelwake()
 	register m_head *rmp = mp;
 
 	if (rmp->reelwait) {
+		/*
+		 * Reset reelwait to make sure we send just one single
+		 * weakup event
+		 */
 		rmp->reelwait = FALSE;
 		EDEBUG(("R"));
 		sputwakeup(rmp, 'R');
 	}
 }
 
+/*
+ * FIFO -> Data (Get side)
+ *
+ * Resume FIFO, this is needed as we now know that we may need to do swap data.
+ */
 EXPORT void
 fifo_resume()
 {
@@ -772,6 +995,9 @@ fifo_resume()
 	}
 }
 
+/*
+ * Data -> FIFO (Put side)
+ */
 EXPORT void
 fifo_sync(size)
 	int	size;
@@ -808,7 +1034,7 @@ fifo_errno()
 	if (mp == NULL)
 		return (0);
 
-	if ((mp->flags & FIFO_EXERRNO) != 0)
+	if ((mp->eflags & FIFO_EXERRNO) != 0)
 		return (mp->ferrno);
 	return (0);
 }
@@ -822,6 +1048,9 @@ fifo_onexit(err, ignore)
 	fifo_exit(err);
 }
 
+/*
+ * Both sides of the FIFO may call this
+ */
 EXPORT void
 fifo_exit(err)
 	int	err;
@@ -837,9 +1066,9 @@ fifo_exit(err)
 	/*
 	 * Tell other side of FIFO to exit().
 	 */
-	mp->flags |= FIFO_EXIT;
+	mp->eflags |= FIFO_EXIT;
 	if (err != 0) {
-		mp->flags |= FIFO_EXERRNO;
+		mp->eflags |= FIFO_EXERRNO;
 		mp->ferrno = err;
 	}
 
@@ -849,23 +1078,28 @@ fifo_exit(err)
 	if ((pid != 0) ^ cflag) {
 		EDEBUG(("Fifo_exit() from get prozess: cflag: %d pid: %d\n", cflag, pid));
 		/* Get Prozess */
-		close(mp->gpin);
-		close(mp->ppout);
+		(void) close(mp->gpin);
+		(void) close(mp->ppout);
 	} else {
 		EDEBUG(("Fifo_exit() from put prozess: cflag: %d pid: %d\n", cflag, pid));
 		/* Put Prozess */
-		close(mp->gpout);
-		close(mp->ppin);
+		(void) close(mp->gpout);
+		(void) close(mp->ppin);
 	}
 }
 
+/*
+ * FIFO -> Data (Get side)
+ *
+ * The tar -x/-t process tells the tape process to mount a new volume.
+ */
 EXPORT void
 fifo_chitape()
 {
 	char	c;
 
 	mp->flags |= FIFO_I_CHREEL;
-	if (mp->flags & FIFO_MEOF) {
+	if (mp->pflags & FIFO_MEOF) {
 		EDEBUG(("n"));
 		sputwakeup(mp, 'n');
 	} else {
@@ -873,26 +1107,45 @@ fifo_chitape()
 		"Implementation botch: FIFO_MEOF not set in fifo_chitape()\n");
 	}
 	EDEBUG(("w"));
-	c = sgetwait(mp);
+	c = sgetwait(mp, 6);
+	if (c != 't') {
+		errmsgno(EX_BAD, "Implementation botch: with FIFO_I_CHREEL\n");
+		comerrno(EX_BAD,
+			"Did not wake up from fifo_iwait() - got '%c'.\n", c);
+	}
 }
 
+/*
+ * Data -> FIFO (Put side)
+ *
+ * The tar -c process tells the tape process to mount a new volume.
+ */
 EXPORT void
 fifo_chotape()
 {
 	char	c;
 
-	mp->flags |= FIFO_O_CHREEL;
+	mp->pflags |= FIFO_O_CHREEL;
 	if (mp->oblocked) {
+		/*
+		 * Reset oblocked to make sure we send just one single
+		 * weakup event
+		 */
 		mp->oblocked = FALSE;
 		EDEBUG(("N"));
 		sgetwakeup(mp, 'N');
 	}
 	EDEBUG(("W"));
-	c = sputwait(mp);
+	c = sputwait(mp, 7);
+	if (c != 'T') {
+		errmsgno(EX_BAD, "Implementation botch: with FIFO_O_CHREEL\n");
+		comerrno(EX_BAD,
+			"Did not wake up from fifo_owait() - got '%c'.\n", c);
+	}
 }
 
 /*
- * Tape -> FIFO
+ * Tape -> FIFO (Put/Input side)
  *
  * Tape input process for the FIFO.
  * This process runs in background and fills the FIFO with data from the TAPE.
@@ -904,10 +1157,25 @@ do_in()
 	int	amt;
 	int	cnt;
 
+	/*
+	 * First start reading to reduce total startup time.
+	 */
+	cnt = fifo_iwait(mp->ibs);
+	amt = readtape(mp->putptr, cnt);
+	/*
+	 * Wait until the foregound Get/Output process did start to read.
+	 * usleep(1000) will usually not wait at all but may yield
+	 * to a context switch.
+	 */
+	for (cnt = 0; cnt < 5000 && mp->oblocked == FALSE; cnt++)
+		usleep(1000);
+	goto owake;
+
 nextread:
 	do {
 		cnt = fifo_iwait(mp->ibs);
 		amt = readtape(mp->putptr, cnt);
+owake:
 		fifo_owake(amt);
 	} while (amt > 0);
 
@@ -940,7 +1208,7 @@ nextread:
 }
 
 /*
- * FIFO -> Tape
+ * FIFO -> Tape (Get/Output side)
  *
  * Tape output process for the FIFO.
  * This process runs in background and writes to the TAPE using
@@ -1000,6 +1268,11 @@ fbit_nclear(name, startb, stopb)
 	bit_nclear(name, startb, stopb);
 }
 
+/* -------------------------------------------------------------------------- */
+/*
+ * Allocate shared memory for the FIFO.
+ */
+
 #ifdef	USE_MMAP
 LOCAL char *
 mkshare(size)
@@ -1010,19 +1283,24 @@ mkshare(size)
 
 #ifdef	MAP_ANONYMOUS	/* HP/UX */
 	f = -1;
-	addr = mmap(0, mmap_sizeparm(size), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, f, 0);
+	addr = mmap(0, mmap_sizeparm(size), PROT_READ|PROT_WRITE,
+					MAP_SHARED|MAP_ANONYMOUS, f, 0);
 #else
 	if ((f = open("/dev/zero", O_RDWR)) < 0)
 		comerr("Cannot open '/dev/zero'.\n");
-	addr = mmap(0, mmap_sizeparm(size), PROT_READ|PROT_WRITE, MAP_SHARED, f, 0);
+	addr = mmap(0, mmap_sizeparm(size), PROT_READ|PROT_WRITE,
+					MAP_SHARED, f, 0);
 #endif
 	if (addr == (char *)-1)
 		comerr("Cannot get mmap for %d Bytes on /dev/zero.\n", size);
 	if (f >= 0)
 		close(f);
 
-	if (debug) errmsgno(EX_BAD, "shared memory segment attached at: %p size %d\n",
-				(void *)addr, size);
+	if (debug) {
+		errmsgno(EX_BAD,
+			"shared memory segment attached at: %p size %d\n",
+			(void *)addr, size);
+	}
 
 #ifdef	HAVE_MLOCK
 	if (getuid() == 0 && mlock(addr, size) < 0)
@@ -1061,13 +1339,19 @@ mkshm(size)
 	if ((id = shmget(IPC_PRIVATE, size, IPC_CREAT|0600)) == -1)
 		comerr("shmget failed\n");
 
-	if (debug) errmsgno(EX_BAD, "shared memory segment allocated: %d\n", id);
+	if (debug) {
+		errmsgno(EX_BAD,
+			"shared memory segment allocated: %d\n", id);
+	}
 
 	if ((addr = shmat(id, (char *)0, 0600)) == (char *)-1)
 		comerr("shmat failed\n");
 
-	if (debug) errmsgno(EX_BAD, "shared memory segment attached at: %p size %d\n",
-				(void *)addr, size);
+	if (debug) {
+		errmsgno(EX_BAD,
+			"shared memory segment attached at: %p size %d\n",
+			(void *)addr, size);
+	}
 
 	if (shmctl(id, IPC_RMID, 0) < 0)
 		comerr("shmctl failed\n");
@@ -1093,15 +1377,19 @@ mkos2shm(size)
 	char	*addr;
 
 	/*
-	 * The OS/2 implementation of shm (using shm.dll) limits the size of one shared
-	 * memory segment to 0x3fa000 (aprox. 4MBytes). Using OS/2 native API we have
-	 * no such restriction so I decided to use it allowing fifos of arbitrary size.
+	 * The OS/2 implementation of shm (using shm.dll) limits the size of
+	 * one shared memory segment to 0x3fa000 (aprox. 4MBytes). Using OS/2
+	 * native API we have no such restriction so I decided to use it
+	 * allowing fifos of arbitrary size.
 	 */
 	if (DosAllocSharedMem(&addr, NULL, size, 0X100L | 0x1L | 0x2L | 0x10L))
 		comerr("DosAllocSharedMem() failed\n");
 
-	if (debug) errmsgno(EX_BAD, "shared memory allocated attached at: %p size %d\n",
-				(void *)addr, size);
+	if (debug) {
+		errmsgno(EX_BAD,
+			"shared memory allocated attached at: %p size %d\n",
+			(void *)addr, size);
+	}
 
 	return (addr);
 }
@@ -1127,8 +1415,11 @@ mkbeosshm(size)
 		comerrno(fifo_aid,
 			"Cannot get create_area for %d Bytes FIFO.\n", size);
 	}
-	if (debug) errmsgno(EX_BAD, "shared memory allocated attached at: %p size %d\n",
-				(void *)fifo_addr, size);
+	if (debug) {
+		errmsgno(EX_BAD,
+			"shared memory allocated attached at: %p size %d\n",
+			(void *)fifo_addr, size);
+	}
 
 	return (fifo_addr);
 }
@@ -1142,9 +1433,12 @@ beosshm_child()
 	delete_area(area_for(fifo_addr));
 	/*
 	 * Clone (share) the original one.
+	 * The original implementaion used B_ANY_ADDRESS, but newer Haiku
+	 * versions implement address randomization that prevents us from
+	 * using the pointer in the child. So we noe use B_EXACT_ADDRESS.
 	 */
 	fifo_aid = clone_area(fifo_name, &fifo_addr,
-			B_ANY_ADDRESS, B_READ_AREA|B_WRITE_AREA,
+			B_EXACT_ADDRESS, B_READ_AREA|B_WRITE_AREA,
 			fifo_aid);
 	if (buf != fifo_addr) {
 		comerrno(EX_BAD, "Panic FIFO addr.\n");

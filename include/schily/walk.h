@@ -1,8 +1,8 @@
-/* @(#)walk.h	1.30 11/08/03 Copyright 2004-2011 J. Schilling */
+/* @(#)walk.h	1.35 18/10/29 Copyright 2004-2018 J. Schilling */
 /*
  *	Definitions for directory tree walking
  *
- *	Copyright (c) 2004-2011 J. Schilling
+ *	Copyright (c) 2004-2018 J. Schilling
  */
 /*
  * The contents of this file are subject to the terms of the
@@ -11,6 +11,8 @@
  * with the License.
  *
  * See the file CDDL.Schily.txt in this distribution for details.
+ * A copy of the CDDL is also available via the Internet at
+ * http://www.opensource.org/licenses/cddl1.txt
  *
  * When distributing Covered Code, include this CDDL HEADER in each
  * file and include the License file CDDL.Schily.txt from this distribution.
@@ -38,7 +40,7 @@ extern "C" {
 /*
  * Flags to control treewalk() via 'walkflags'.
  *
- *	WALK_CHDIR	is not implemented, treewalk() always does chdir()
+ *	WALK_CHDIR	Change directory while traversing
  *
  *	WALK_PHYS	Clearing WALK_PHYS has highest precedence and equals
  *			'find -follow'. If WALK_PHYS is clear, always use stat.
@@ -65,6 +67,8 @@ extern "C" {
 #define	WALK_LS_ATIME	0x1000	/* -ls lists atime instead of mtime	*/
 #define	WALK_LS_CTIME	0x2000	/* -ls lists ctime instead of mtime	*/
 #define	WALK_STRIPLDOT	0x4000	/* Strip leading "./" from path		*/
+#define	WALK_MOUNTPLUS	0x8000	/* Do not continue at mount points	*/
+#define	WALK_XDEV	0x8000	/* Do not continue at mount points	*/
 
 /*
  * The 'type' argument to walkfun.
@@ -80,6 +84,11 @@ extern "C" {
 #ifndef	__sqfun_t_defined
 typedef	int	(*sqfun_t)	__PR((void *arg));
 #define	__sqfun_t_defined
+#endif
+
+#ifndef	__cbfun_t_defined
+typedef	int	(*cbfun_t)	__PR((int ac, char  **argv));
+#define	__cbfun_t_defined
 #endif
 
 struct WALK {
@@ -101,6 +110,7 @@ struct WALK {
 	int	pflags;		/* (*walkfun)() private, unused by treewalk  */
 	int	auxi;		/* (*walkfun)() private, unused by treewalk  */
 	void	*auxp;		/* (*walkfun)() private, unused by treewalk  */
+	void	*__reserved[16]; /* For future extensions		    */
 };
 
 /*
@@ -111,6 +121,11 @@ struct WALK {
 #define	WALK_WF_NOCHDIR	4	/* walk() -> (*walkfun)(): WALK_DNR w chdir() */
 #define	WALK_WF_NOCWD	8	/* walk() -> caller: cannot get working dir  */
 #define	WALK_WF_NOHOME	16	/* walk() -> caller: cannot chdir("..")	    */
+#define	WALK_WF_NOTDIR	32	/* walk() -> walk(): file is not a directory */
+
+#define	WALK_WF_CHOWN	4096	/* (*walkfun)(): changed st_uid or st_gid */
+#define	WALK_WF_CHMOD	8192	/* (*walkfun)(): changed st_mode */
+#define	WALK_WF_CHTIME	16384	/* (*walkfun)(): changed st_mtime or st_ctime */
 
 typedef	int	(*walkfun)	__PR((char *_nm, struct stat *_fs, int _type,
 						struct WALK *_state));
@@ -121,6 +136,7 @@ extern	void	walkinitstate	__PR((struct WALK *_state));
 extern	void	*walkopen	__PR((struct WALK *_state));
 extern	int	walkgethome	__PR((struct WALK *_state));
 extern	int	walkhome	__PR((struct WALK *_state));
+extern	int	walkcwd		__PR((struct WALK *_state));
 extern	int	walkclose	__PR((struct WALK *_state));
 
 #ifdef	__cplusplus

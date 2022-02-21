@@ -1,4 +1,4 @@
-dnl @(#)aclocal.m4	1.101 14/03/24 Copyright 1998-2014 J. Schilling
+dnl @(#)aclocal.m4	1.110 18/08/08 Copyright 1998-2018 J. Schilling
 
 dnl Set VARIABLE to VALUE in C-string form, verbatim, or 1.
 dnl AC_DEFINE_STRING(VARIABLE [, VALUE])
@@ -64,6 +64,7 @@ AC_CACHE_VAL(ac_cv_prog_CPPX,
 [  # This must be in double quotes, not single quotes, because CPP may get
   # substituted into the Makefile and "${CC-cc}" will confuse make.
   CPPX="$CPP"
+  CPPX_IN=""
 	cat > conftestcpp << EOF
 	xxzzy
 EOF
@@ -71,7 +72,7 @@ EOF
 	# and if $CC -E fails, we try to use dirname(which($CC))/cpp
 	# We cannot use AC_TRY_EVAL(CPPX conftestcpp | grep xxzzy) because
 	# of a bug in the parser from bash
-	ac_result=`(echo configure:1288: "$CPPX conftestcpp | grep xxzzy" 1>&5; eval $CPPX conftestcpp | grep xxzzy) 2>&5`
+	ac_result=`(echo configure:__oline__: "$CPPX conftestcpp | grep xxzzy" 1>&5; eval $CPPX conftestcpp | grep xxzzy) 2>&5`
 	if test -z "$ac_result"; then
 		changequote(, )dnl
 		ac_file=`eval type ${CC-cc} 2>/dev/null | sed 's%[^/]*/%/%'`
@@ -80,15 +81,26 @@ EOF
 		changequote([, ])dnl
 		if test -f "$ac_dir"/cpp; then
 			CPPX="$ac_dir"/cpp
+		else
+			# gcc -E does not like all file types, but
+			# gcc -E - < does. Test whether this works.
+			ac_result=`(echo configure:__oline__: "$CPPX - < conftestcpp | grep xxzzy" 1>&5; eval $CPPX - < conftestcpp | grep xxzzy) 2>&5`
+			if test -n "$ac_result"; then
+				CPPX_IN="- <"
+			fi
 		fi
 	fi
-	ac_cv_prog_CPPX="$CPPX"])dnl
+	ac_cv_prog_CPPX="$CPPX"
+	ac_cv_prog_CPPX_IN="$CPPX_IN"])dnl
 	CPPX="$ac_cv_prog_CPPX"
+	CPPX_IN="$ac_cv_prog_CPPX_IN"
 else
 	ac_cv_prog_CPPX="$CPPX"
+	ac_cv_prog_CPPX_IN="$CPPX_IN"
 fi
-AC_MSG_RESULT($CPPX)
+AC_MSG_RESULT($CPPX '"$CPPX_IN"')
 AC_SUBST(CPPX)dnl
+AC_SUBST(CPPX_IN)dnl
 ])
 
 dnl Checks if /bin/sh is bash
@@ -872,7 +884,7 @@ AC_DEFUN([AC_STRUCT_DIRENT_D_INO],
 [AC_CACHE_CHECK([if struct dirent contains d_ino], ac_cv_struct_dirent_d_ino,
                 [AC_TRY_COMPILE([
 /*
- * This must be kept in sync with schily/dirdesf.h
+ * This must be kept in sync with schily/dirent.h
  */
 #ifdef	HAVE_SYS_TYPES_H
 #	include <sys/types.h>
@@ -908,6 +920,50 @@ AC_DEFUN([AC_STRUCT_DIRENT_D_INO],
                                 [ac_cv_struct_dirent_d_ino=no])])
 if test $ac_cv_struct_dirent_d_ino = yes; then
   AC_DEFINE(HAVE_DIRENT_D_INO)
+fi])
+
+dnl Checks if structure 'dirent' have field 'd_type'.
+dnl Defines HAVE_DIRENT_D_TYPE on success.
+AC_DEFUN([AC_STRUCT_DIRENT_D_TYPE],
+[AC_CACHE_CHECK([if struct dirent contains d_type], ac_cv_struct_dirent_d_type,
+                [AC_TRY_COMPILE([
+/*
+ * This must be kept in sync with schily/dirent.h
+ */
+#ifdef	HAVE_SYS_TYPES_H
+#	include <sys/types.h>
+#endif
+#ifdef	HAVE_SYS_STAT_H
+#	include <sys/stat.h>
+#endif
+#	ifdef	HAVE_DIRENT_H		/* This a POSIX compliant system */
+#		include <dirent.h>
+#		define	_FOUND_DIR_
+#	else				/* This is a Pre POSIX system	 */
+
+#	define 	dirent	direct
+
+#	if	defined(HAVE_SYS_DIR_H)
+#		include <sys/dir.h>
+#		define	_FOUND_DIR_
+#	endif
+
+#	if	defined(HAVE_NDIR_H) && !defined(_FOUND_DIR_)
+#		include <ndir.h>
+#		define	_FOUND_DIR_
+#	endif
+
+#	if	defined(HAVE_SYS_NDIR_H) && !defined(_FOUND_DIR_)
+#		include <sys/ndir.h>
+#		define	_FOUND_DIR_
+#	endif
+#	endif	/* HAVE_DIRENT_H */
+				],
+                                [struct  dirent d; d.d_type = 0;],
+                                [ac_cv_struct_dirent_d_type=yes],
+                                [ac_cv_struct_dirent_d_type=no])])
+if test $ac_cv_struct_dirent_d_type = yes; then
+  AC_DEFINE(HAVE_DIRENT_D_TYPE)
 fi])
 
 dnl Checks if structure 'DIR' have field 'dd_fd'.
@@ -1496,6 +1552,23 @@ AC_DEFUN([AC_TYPE_SIGINFO_T],
                                 [ac_cv_siginfo_t=no])])
 if test $ac_cv_siginfo_t = yes; then
   AC_DEFINE(HAVE_SIGINFO_T)
+fi])
+
+dnl Checks for type idtype_t
+dnl Defines HAVE_TYPE_IDTYPE_T on success.
+AC_DEFUN([AC_TYPE_IDTYPE_T],
+[AC_CACHE_CHECK([if idtype_t is declared correctly in wait.h], ac_cv_have_type_idtype_t,
+                [AC_TRY_COMPILE([
+#if	defined(HAVE_WAIT_H)
+#	include <wait.h>
+#else
+#include <sys/wait.h>
+#endif],
+                                [idtype_t idt; idt = P_ALL; idt = P_PGID; idt = P_PID; exit (idt == P_PID);],
+                                [ac_cv_have_type_idtype_t=yes],
+                                [ac_cv_have_type_idtype_t=no])])
+if test $ac_cv_have_type_idtype_t = yes; then
+  AC_DEFINE(HAVE_TYPE_IDTYPE_T)
 fi])
 
 dnl Checks for type struct sockaddr_storage
@@ -2466,6 +2539,7 @@ dnl Defines NO_USER_MALLOC if we cannot.
 AC_DEFUN([AC_USER_MALLOC],
 [AC_CACHE_CHECK([if we may not define our own malloc()], ac_cv_no_user_malloc,
                 [AC_TRY_RUN([
+#if !defined(__CYGWIN32__) && !defined(__CYGWIN__)
 static int mcalled;
 char *
 malloc(s)
@@ -2484,14 +2558,17 @@ malloc(s)
 }
 
 free(p) char *p;{}
+#endif	/* !defined(__CYGWIN32__) && !defined(__CYGWIN__) */
 	
 main()
 {
+#if !defined(__CYGWIN32__) && !defined(__CYGWIN__)
 #ifdef	HAVE_STRDUP
 	strdup("aaa");
 #else
 	exit(0);
 #endif
+#endif	/* !defined(__CYGWIN32__) && !defined(__CYGWIN__) */
 	exit(1);}],
                 [ac_cv_no_user_malloc=no],
                 [ac_cv_no_user_malloc=yes])])
@@ -2611,6 +2688,26 @@ exit(1);}],
                 [ac_cv_func_printf_j=no])])
 if test $ac_cv_func_printf_j = yes; then
   AC_DEFINE(HAVE_PRINTF_J)
+fi])
+
+dnl Checks if *printf() supports %zd
+dnl Defines HAVE_PRINTF_Z on success.
+AC_DEFUN([AC_FUNC_PRINTF_Z],
+[AC_CACHE_CHECK([whether *printf() supports %zd], ac_cv_func_printf_z,
+                [AC_TRY_RUN([
+#include <sys/types.h>
+int
+main()
+{ size_t m = 1234567890;
+char buf[32];
+sprintf(buf, "%zd", m);
+if (strcmp(buf, "1234567890") == 0)
+	exit(0);
+exit(1);}],
+                [ac_cv_func_printf_z=yes],
+                [ac_cv_func_printf_z=no])])
+if test $ac_cv_func_printf_z = yes; then
+  AC_DEFINE(HAVE_PRINTF_Z)
 fi])
 
 dnl Checks if *printf() supports %lld
@@ -2962,6 +3059,114 @@ if test $ac_cv_realloc_null = yes; then
 fi])
 
 
+dnl Checks if waitid() is present and is at least minimally usable.
+dnl Mac OS X is POSIX certified but definitely not POSIX compliant
+dnl so we need to to implement a complex test for waitid().
+dnl Defines HAVE_WAITID on success.
+AC_DEFUN([AC_FUNC_WAITID],
+[AC_CHECK_HEADERS(stdlib.h)
+AC_CHECK_HEADERS(unistd.h)
+AC_CHECK_HEADERS(wait.h)
+AC_HEADER_SYS_WAIT
+AC_CACHE_CHECK([for halfway POSIX compliant waitid()], ac_cv_func_waitid,
+                [AC_TRY_RUN([
+#ifdef	HAVE_STDLIB_H
+#include <stdlib.h>
+#endif
+#ifdef	HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+#if	defined(HAVE_WAIT_H)
+#	include <wait.h>
+#else
+#include <sys/wait.h>
+#endif
+#include <signal.h>
+/*
+ * Non-standard compliant platforms may need 
+ * #include <signal.h> or something similar
+ * in addition to the include files above.
+ */
+
+int
+main()
+{
+	siginfo_t	si;
+	pid_t	pid;
+	int	ret;
+
+	if ((pid = fork()) < 0)
+		exit(1);
+	if (pid == 0) {
+		_exit(1234567890);
+	}
+	ret = waitid(P_PID, pid, &si, WEXITED);
+	if (ret < 0)
+		exit(1);
+	if (pid != si.si_pid)		/* Mac OS X has si.si_pid == 0 */
+		exit(2);
+	if (si.si_code != CLD_EXITED)	/* Mac OS X has si.si_code == 0 */
+		exit(3);
+	if ((si.si_status & 0xFFFF) != (1234567890 & 0xFFFF))
+		exit(4);		/* Should deliver more than 8 bits */
+					/* Linux only delivers 8 bits */
+					/* Mac OS X delivers 24 bits */
+
+	exit(0);
+}],
+                [ac_cv_func_waitid=yes],
+                [ac_cv_func_waitid=no])])
+if test $ac_cv_func_waitid = yes; then
+  AC_DEFINE(HAVE_WAITID)
+fi])
+
+
+dnl Checks whether waitpid() is present and supports WNOWAIT.
+dnl SVr4 supports it but POSIX does not list it.
+dnl Defines HAVE_WNOWAIT_WAITPID on success.
+AC_DEFUN([AC_WNOWAIT_WAITPID],
+[AC_CHECK_HEADERS(stdlib.h)
+AC_CHECK_HEADERS(unistd.h)
+AC_CHECK_HEADERS(wait.h)
+AC_HEADER_SYS_WAIT
+AC_HEADER_ERRNO_DEF
+AC_CACHE_CHECK([for SVr4 compliant waitpid() with WNOWAIT support], ac_cv_wnowait_waitpid,
+                [AC_TRY_RUN([
+#ifdef	HAVE_STDLIB_H
+#include <stdlib.h>
+#endif
+#ifdef	HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+#if	defined(HAVE_WAIT_H)
+#	include <wait.h>
+#else
+#include <sys/wait.h>
+#endif
+#include <errno.h>
+#ifndef	HAVE_ERRNO_DEF
+extern	int	errno;
+#endif
+
+int
+main()
+{
+	int	xstat;
+	pid_t	pid = -1;
+	int	ret;
+
+	ret = waitpid(pid, &xstat, WNOWAIT);
+	if (ret < 0 && errno == EINVAL)
+		exit(1);
+	exit(0);
+}],
+                [ac_cv_wnowait_waitpid=yes],
+                [ac_cv_wnowait_waitpid=no])])
+if test $ac_cv_wnowait_waitpid = yes; then
+  AC_DEFINE(HAVE_WNOWAIT_WAITPID)
+fi])
+
+
 dnl XXXXXXXXXXXXXXXXXX Begin Stolen (but modified) from GNU tar XXXXXXXXXXXXXXXXXXXXXXXXXXX
 dnl Changes:
 
@@ -3259,3 +3464,49 @@ fi
 if test $ac_cv_prog_shell_broken_e = yes; then
   AC_DEFINE(HAVE_PROG_SHELL_BROKEN_E)
 fi])])
+
+dnl Checks if a file exists
+dnl Do not use test -r <file> as bash on Haiku returns 0 for test -r /dev/stdin
+dnl even though /dev/stdin does not exist.
+dnl
+dnl Defines HAVE_<PATH> on success.
+dnl AC_STAT_FILE(FILE, [ACTION-IF-FOUND [, ACTION-IF-NOT-FOUND]])
+AC_DEFUN([AC_STAT_FILE],
+[AC_REQUIRE([AC_PROG_CC]) 
+dnl Do the transliteration at runtime so arg 1 can be a shell variable. 
+ac_safe=`echo "$1" | sed 'y%./+-%__p_%'` 
+AC_MSG_CHECKING([for $1])
+AC_CACHE_VAL(ac_cv_file_$ac_safe,
+                [AC_TRY_RUN([
+#include <sys/types.h>
+#include <sys/stat.h>
+
+int
+main()
+{
+	struct	stat	sb;
+
+	exit(stat("$1", &sb) < 0);
+}],
+                [eval ac_cv_file_$ac_safe=yes],
+                [eval ac_cv_file_$ac_safe=no])])
+if eval "test \"`echo '$ac_cv_file_'$ac_safe`\" = yes"; then
+  AC_MSG_RESULT(yes)
+  ifelse([$2], , :, [$2])
+else
+  AC_MSG_RESULT(no)
+  ifelse([$3], , , [$3])
+fi
+])
+
+dnl AC_STAT_FILES(FILE... [, ACTION-IF-FOUND [, ACTION-IF-NOT-FOUND]])
+AC_DEFUN(AC_STAT_FILES,
+[for ac_file in $1
+do
+AC_STAT_FILE($ac_file,
+[changequote(, )dnl
+  ac_tr_file=HAVE_`echo $ac_file | sed 'y%abcdefghijklmnopqrstuvwxyz./-%ABCDEFGHIJKLMNOPQRSTUVWXYZ___%'`
+changequote([, ])dnl
+  AC_DEFINE_UNQUOTED($ac_tr_file) $2], $3)dnl
+done
+])

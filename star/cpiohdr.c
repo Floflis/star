@@ -1,14 +1,14 @@
-/* @(#)cpiohdr.c	1.27 10/08/23 Copyright 1994-2010 J. Schilling */
+/* @(#)cpiohdr.c	1.34 18/07/15 Copyright 1994-2018 J. Schilling */
 #include <schily/mconfig.h>
 #ifndef lint
 static	UConst char sccsid[] =
-	"@(#)cpiohdr.c	1.27 10/08/23 Copyright 1994-2010 J. Schilling";
+	"@(#)cpiohdr.c	1.34 18/07/15 Copyright 1994-2018 J. Schilling";
 #endif
 /*
  *	Handling routines to read/write, parse/create
  *	cpio archive headers
  *
- *	Copyright (c) 1994-2010 J. Schilling
+ *	Copyright (c) 1994-2018 J. Schilling
  */
 /*
  * The contents of this file are subject to the terms of the
@@ -17,6 +17,8 @@ static	UConst char sccsid[] =
  * with the License.
  *
  * See the file CDDL.Schily.txt in this distribution for details.
+ * A copy of the CDDL is also available via the Internet at
+ * http://www.opensource.org/licenses/cddl1.txt
  *
  * When distributing Covered Code, include this CDDL HEADER in each
  * file and include the License file CDDL.Schily.txt from this distribution.
@@ -33,6 +35,8 @@ static	UConst char sccsid[] =
 #include <schily/string.h>
 #define	__XDEV__	/* Needed to activate _dev_major()/_dev_minor() */
 #include <schily/device.h>
+#define	GT_COMERR		/* #define comerr gtcomerr */
+#define	GT_ERROR		/* #define error gterror   */
 #include <schily/schily.h>
 #include <schily/intcvt.h>
 #include "starsubs.h"
@@ -455,6 +459,22 @@ cpiotcb_to_info(ptb, info)
 
 	move.m_data = info->f_name;
 	move.m_flags = 0;
+	if (info->f_namelen <= 1) {
+		errmsgno(EX_BAD, "Name size <= 0.\n");
+		die(EX_BAD);		/* Need to change to permit -i resync */
+	}
+#ifdef	ENFORCE_CPIO_NAMELEN
+	if (info->f_namelen > props.pr_maxnamelen) {
+		errmsgno(EX_BAD, "Name length (%lu) larger than maximum (%d).\n",
+			info->f_namelen, props.pr_maxnamelen);
+		die(EX_BAD);		/* Need to change to permit -i resync */
+	}
+#endif
+	if (info->f_namelen > PATH_MAX) {
+		errmsgno(EX_BAD, "Name length (%lu) larger than PATH_MAX.\n",
+			info->f_namelen);
+		die(EX_BAD);		/* Need to change to permit -i resync */
+	}
 	info->f_rsize = info->f_llsize = info->f_namelen;
 	info->f_flags |= F_LONGNAME;
 	if (xt_file(info, vp_move_from_arch, &move, 0, "moving file name") < 0)
@@ -468,6 +488,15 @@ cpiotcb_to_info(ptb, info)
 	if (is_symlink(info)) {
 		move.m_data = info->f_lname;
 		move.m_flags = 0;
+		if (info->f_size <= 0) {
+			errmsgno(EX_BAD, "Symlink size <= 0.\n");
+			die(EX_BAD);	/* Need to change to permit -i resync */
+		}
+		if (info->f_size > PATH_MAX) {
+			errmsgno(EX_BAD, "Linkname length (%lld) larger than PATH_MAX.\n",
+				(Llong)info->f_size);
+			die(EX_BAD);	/* Need to change to permit -i resync */
+		}
 		if (xt_file(info, vp_move_from_arch, &move, 0, "moving link name") < 0)
 			die(EX_BAD);
 		info->f_flags &= ~F_DATA_SKIPPED;
@@ -529,6 +558,17 @@ cpio_checkswab(ptb)
 		if (l2 <= 257)
 			l1 = l2;
 	}
+	/*
+	 * The maximum filename length in binary cpio is 256 bytes.
+	 * In theory, more would be possible, but a long filename length
+	 * may be caused by a rotten archive. As we may safely assume that
+	 * the whole size of a PTB (TBLOCK) is accessible, we run the check
+	 * for the null byte at the end of the filename as long as the
+	 * filename length is less or equal to TBLOCK - CPIOBIN_HDRSZ.
+	 */
+	if ((l1 + CPIOBIN_HDRSZ) > TBLOCK)
+		return (H_CPIO_BIN);
+
 	if (((char *)ptb)[CPIOBIN_HDRSZ+l1-2] == '\0' &&
 	    ((char *)ptb)[CPIOBIN_HDRSZ+l1-1] != '\0')
 		return (H_SWAPPED(H_CPIO_BIN));
@@ -536,7 +576,8 @@ cpio_checkswab(ptb)
 }
 
 /*
- * This simple sum is used for the SYSvr4 file content CRC
+ * This simple sum is used for the SYSvr4 file content checksum.
+ * It is a simple 32 bit sum even though the related CPIO format is called CRC.
  * Use Int32_t to implement the same behavior as the AT&T cpio command.
  */
 LOCAL Int32_t
@@ -544,7 +585,7 @@ cpio_cksum(name)
 	char	*name;
 {
 		char		buf[8192];
-		int		f = _fileopen(name, "rb");
+		int		f = _lfileopen(name, "rb");
 	register int		amt;
 	register char		*p;
 	register char		*ep;

@@ -1,13 +1,13 @@
-/* @(#)mt.c	1.28 11/08/14 Copyright 2000-2011 J. Schilling */
+/* @(#)mt.c	1.30 18/11/28 Copyright 2000-2018 J. Schilling */
 #include <schily/mconfig.h>
 #ifndef lint
 static	UConst char sccsid[] =
-	"@(#)mt.c	1.28 11/08/14 Copyright 2000-2011 J. Schilling";
+	"@(#)mt.c	1.30 18/11/28 Copyright 2000-2018 J. Schilling";
 #endif
 /*
  *	Magnetic tape manipulation program
  *
- *	Copyright (c) 2000-2011 J. Schilling
+ *	Copyright (c) 2000-2018 J. Schilling
  */
 /*
  * The contents of this file are subject to the terms of the
@@ -16,6 +16,8 @@ static	UConst char sccsid[] =
  * with the License.
  *
  * See the file CDDL.Schily.txt in this distribution for details.
+ * A copy of the CDDL is also available via the Internet at
+ * http://www.opensource.org/licenses/cddl1.txt
  *
  * When distributing Covered Code, include this CDDL HEADER in each
  * file and include the License file CDDL.Schily.txt from this distribution.
@@ -196,8 +198,8 @@ main(ac, av)
 	}
 	if (help) usage(0);
 	if (prvers) {
-		printf("mt %s (%s-%s-%s)\n\n", "1.28", HOST_CPU, HOST_VENDOR, HOST_OS);
-		printf("Copyright (C) 2000-2009 Jörg Schilling\n");
+		printf("mt %s %s (%s-%s-%s)\n\n", "1.30", "2018/11/28", HOST_CPU, HOST_VENDOR, HOST_OS);
+		printf("Copyright (C) 2000-2018 Jörg Schilling\n");
 		printf("This is free software; see the source for copying conditions.  There is NO\n");
 		printf("warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n");
 		exit(0);
@@ -542,7 +544,8 @@ retry:
 	} else if ((mtfd = open(tape, oflag)) < 0) {
 			ret = -1;
 	}
-	if (wready && n++ < 120 && (geterrno() == EIO || geterrno() == EBUSY)) {
+	if (wready && n++ < 120 && ret < 0 &&
+	    (geterrno() == EIO || geterrno() == EBUSY)) {
 		sleep(1);
 		goto retry;
 	}

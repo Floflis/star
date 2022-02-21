@@ -1,14 +1,14 @@
 /*#define	PLUS_DEBUG*/
-/* @(#)find_main.c	1.68 10/08/23 Copyright 2004-2010 J. Schilling */
+/* @(#)find_main.c	1.74 18/10/29 Copyright 2004-2018 J. Schilling */
 #include <schily/mconfig.h>
 #ifndef lint
 static	UConst char sccsid[] =
-	"@(#)find_main.c	1.68 10/08/23 Copyright 2004-2010 J. Schilling";
+	"@(#)find_main.c	1.74 18/10/29 Copyright 2004-2018 J. Schilling";
 #endif
 /*
  *	Another find implementation...
  *
- *	Copyright (c) 2004-2010 J. Schilling
+ *	Copyright (c) 2004-2018 J. Schilling
  */
 /*
  * The contents of this file are subject to the terms of the
@@ -17,6 +17,8 @@ static	UConst char sccsid[] =
  * with the License.
  *
  * See the file CDDL.Schily.txt in this distribution for details.
+ * A copy of the CDDL is also available via the Internet at
+ * http://www.opensource.org/licenses/cddl1.txt
  *
  * When distributing Covered Code, include this CDDL HEADER in each
  * file and include the License file CDDL.Schily.txt from this distribution.
@@ -34,14 +36,16 @@ static	UConst char sccsid[] =
 
 #include <schily/nlsdefs.h>
 
-char	strvers[] = "1.5";	/* The pure version string	*/
-
 #include <schily/walk.h>
 #include <schily/find.h>
+#include "find_tok.h"
+#include "version.h"
 
-LOCAL	int	walkfunc	__PR((char *nm, struct stat *fs, int type, struct WALK *state));
+LOCAL	int	walkfunc	__PR((char *nm, struct stat *fs, int type,
+					struct WALK *state));
 LOCAL	int	getflg		__PR((char *optstr, long *argp));
-EXPORT	int	find_main	__PR((int ac, char **av, char **ev, FILE *std[3], squit_t *quit));
+EXPORT	int	find_main	__PR((int ac, char **av, char **ev,
+					FILE *std[3], squit_t *quit));
 
 LOCAL int
 walkfunc(nm, fs, type, state)
@@ -61,21 +65,21 @@ walkfunc(nm, fs, type, state)
 	}
 	if (type == WALK_NS) {
 		ferrmsg(state->std[2],
-				gettext("Cannot stat '%s'.\n"), nm);
+				_("Cannot stat '%s'.\n"), nm);
 		state->err = 1;
 		return (0);
 	} else if (type == WALK_SLN && (state->walkflags & WALK_PHYS) == 0) {
 		ferrmsg(state->std[2],
-				gettext("Cannot follow symlink '%s'.\n"), nm);
+				_("Cannot follow symlink '%s'.\n"), nm);
 		state->err = 1;
 		return (0);
 	} else if (type == WALK_DNR) {
 		if (state->flags & WALK_WF_NOCHDIR) {
 			ferrmsg(state->std[2],
-				gettext("Cannot chdir to '%s'.\n"), nm);
+				_("Cannot chdir to '%s'.\n"), nm);
 		} else {
 			ferrmsg(state->std[2],
-				gettext("Cannot read '%s'.\n"), nm);
+				_("Cannot read '%s'.\n"), nm);
 		}
 		state->err = 1;
 		return (0);
@@ -147,8 +151,7 @@ find_main(ac, av, ev, std, quit)
 
 #ifdef	USE_NLS
 	setlocale(LC_ALL, "");
-	bindtextdomain("SCHILY_FIND", "/opt/schily/lib/locale");
-	textdomain("SCHILY_FIND");
+	bindtextdomain(TEXT_DOMAIN, "/opt/schily/lib/locale");
 #endif
 	find_argsinit(&fa);
 	for (i = 0; i < 3; i++) {
@@ -156,9 +159,13 @@ find_main(ac, av, ev, std, quit)
 		file_raise(std[i], FALSE);
 		fa.std[i] = std[i];
 	}
-	fa.walkflags = WALK_CHDIR | WALK_PHYS;
-	fa.walkflags |= WALK_NOSTAT;
-	fa.walkflags |= WALK_NOEXIT;
+	fa.walkflags = 0;
+	fa.walkflags |= WALK_CHDIR;	/* Change directory while traversing */
+	fa.walkflags |= WALK_PHYS;	/* Use lstat() to check files	    */
+	fa.walkflags |= WALK_NOSTAT;	/* Try to avoid lstst()/stat() calls */
+	fa.walkflags |= WALK_NOEXIT;	/* Do not call exit() but return    */
+	if (quit && quit->flags & SQ_CALL)
+		fa.callfun = quit->callfun;
 
 	/*
 	 * Do not check the return code for getargs() as we may get an error
@@ -174,8 +181,8 @@ find_main(ac, av, ev, std, quit)
 	}
 	if (prversion) {
 		fprintf(std[1],
-		"sfind release %s (%s-%s-%s) Copyright (C) 2004-2010 Jörg Schilling\n",
-				strvers,
+		"sfind release %s %s (%s-%s-%s) Copyright (C) 2004-2018 Jörg Schilling\n",
+				find_strvers(), VERSION_DATE,
 				HOST_CPU, HOST_VENDOR, HOST_OS);
 		goto out;
 	}
@@ -195,19 +202,21 @@ find_main(ac, av, ev, std, quit)
 		}
 		if (fa.primtype != FIND_ENDARGS) {
 			ferrmsgno(std[2], EX_BAD,
-					gettext("Incomplete expression.\n"));
+					_("Incomplete expression.\n"));
 			find_free(Tree, &fa);
 			ret = EX_BAD;
 			goto out;
 		}
+#ifndef	CHFILE
 		if (find_pname(Tree, "-chown") || find_pname(Tree, "-chgrp") ||
 		    find_pname(Tree, "-chmod")) {
 			ferrmsgno(std[2], EX_BAD,
-				gettext("Unsupported primary -chown/-chgrp/-chmod.\n"));
+				_("Unsupported primary -chown/-chgrp/-chmod.\n"));
 			find_free(Tree, &fa);
 			ret = EX_BAD;
 			goto out;
 		}
+#endif
 	} else {
 		Tree = 0;
 	}

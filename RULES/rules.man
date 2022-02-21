@@ -1,6 +1,6 @@
-#ident "@(#)rules.man	1.6 12/01/23 "
+#ident "@(#)rules.man	1.11 18/08/14 "
 ###########################################################################
-# Written 1997 by J. Schilling
+# Written 1997-2018 by J. Schilling
 ###########################################################################
 #
 # Manual page building rules
@@ -14,6 +14,8 @@
 # with the License.
 #
 # See the file CDDL.Schily.txt in this distribution for details.
+# A copy of the CDDL is also available via the Internet at
+# http://www.opensource.org/licenses/cddl1.txt
 #
 # When distributing Covered Code, include this CDDL HEADER in each
 # file and include the License file CDDL.Schily.txt from this distribution.
@@ -44,10 +46,21 @@ _INSMODEI=	$(_UNIQ)$(INSMODE)
 __INSMODEI=	$(_INSMODEI:$(_UNIQ)=$(INSMODEF))
 INSMODEI=	$(__INSMODEI:$(_UNIQ)%=%)
 
-all:		$(ARCHDIR) $(PTARGET)
+all man:	$(ARCHDIR) $(WAIT) $(PTARGET)
 
-$(PTARGET):	$(ARCHDIR) $(SRCFILE)
+install installman:	$(ARCHDIR) man
+
+installman:	man install
+
+$(PTARGET):	$(SRCFILE)
 		$(LOCALIZE) $(SRCFILE) $@
+
+#
+# gmake only. Other make implementations use a no-xxx/ prefix.
+# gmake calls prerequisites to the right of | as order-only-prerequisites
+# and does not evaluate the time stamp from such prerequisites.
+#
+$(GMAKE_ONLY)$(PTARGET): | $(ARCHDIR)
 
 $(ARCHDIR):
 		$(MKDIR) -p $@

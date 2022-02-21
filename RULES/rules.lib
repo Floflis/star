@@ -1,4 +1,4 @@
-#ident "@(#)rules.lib	1.10 07/05/06 "
+#ident "@(#)rules.lib	1.13 18/08/14 "
 ###########################################################################
 # Written 1996 by J. Schilling
 ###########################################################################
@@ -14,6 +14,8 @@
 # with the License.
 #
 # See the file CDDL.Schily.txt in this distribution for details.
+# A copy of the CDDL is also available via the Internet at
+# http://www.opensource.org/licenses/cddl1.txt
 #
 # When distributing Covered Code, include this CDDL HEADER in each
 # file and include the License file CDDL.Schily.txt from this distribution.
@@ -32,7 +34,7 @@ __AR.o=		$(_UNIQ)$(AR.o)
 ___AR.o=	$(__AR.o:$(_UNIQ)=$(AR) $(ARFLAGS) $@)
 _AR.o=		$(___AR.o:$(_UNIQ)%=%)
 
-all:		$(TARGET_PATH) $(PTARGET)
+all:		$(TARGET_PATH) $(PTARGET) $(MAN)
 
 $(TARGET_PATH):
 		$(MKDIR) -p $@
@@ -49,4 +51,5 @@ include		$(SRCROOT)/$(RULESDIR)/rules.ins
 include		$(SRCROOT)/$(RULESDIR)/rules.tag
 include		$(SRCROOT)/$(RULESDIR)/rules.hlp
 include		$(SRCROOT)/$(RULESDIR)/rules.dep
+include		$(SRCROOT)/$(RULESDIR)/rules.cst
 ###########################################################################

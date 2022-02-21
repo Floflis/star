@@ -1,5 +1,5 @@
 #!/bin/sh
-# @(#)oarch.sh  1.15 09/10/31 Copyright 2005-2009 J. Schilling
+# @(#)oarch.sh  1.18 18/10/04 Copyright 2005-2018 J. Schilling
 ###########################################################################
 # Written 2005 by J. Schilling
 ###########################################################################
@@ -11,6 +11,8 @@
 # with the License.
 #
 # See the file CDDL.Schily.txt in this distribution for details.
+# A copy of the CDDL is also available via the Internet at
+# http://www.opensource.org/licenses/cddl1.txt
 #
 # When distributing Covered Code, include this CDDL HEADER in each
 # file and include the License file CDDL.Schily.txt from this distribution.
@@ -40,10 +42,10 @@ if [ .$1 = .-help ]; then
 	echo "Usage: oarch.sh [options]"
 	echo "Options:"
 	echo "	-debug	Print debugging information"
-	echo "	-c	Print C_ARCH instrad of OARCH"
-	echo "	-o	Print O_ARCH instrad of OARCH"
-	echo "	-p	Print PARCH instrad of OARCH"
-	echo "	-x	Print XARCH instrad of OARCH"
+	echo "	-c	Print C_ARCH instead of OARCH"
+	echo "	-o	Print O_ARCH instead of OARCH"
+	echo "	-p	Print PARCH instead of OARCH"
+	echo "	-x	Print XARCH instead of OARCH"
 	exit
 fi
 if [ .$1 = .-debug ]; then
@@ -99,9 +101,16 @@ OSVERS=`uname -v | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ, /\\()"' 'abcdefghijklmnopqrst
 
 O_ARCH="$OSNAME"
 
-case "$OSREL" in
+case "$OSNAME" in
 	cygwin*) O_ARCH=cygwin32_nt;;
 esac
+
+if [ ."$OSNAME" = .aix ]; then
+	P_ARCH=rs6000
+fi
+if [ ."$OSNAME" = .os400 ]; then
+	P_ARCH=powerpc
+fi
 if [ ."$OSNAME" = .bsd-os ]; then
 	case "$OSREL" in
 		3.*)	O_ARCH=bsd-os3;;

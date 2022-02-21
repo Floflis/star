@@ -1,6 +1,6 @@
-#ident "@(#)rules.prg	1.20 10/05/15 "
+#ident "@(#)rules.prg	1.23 17/04/16 "
 ###########################################################################
-# Written 1996 by J. Schilling
+# Written 1996-2017 by J. Schilling
 ###########################################################################
 #
 # Generic rules for program names
@@ -14,6 +14,8 @@
 # with the License.
 #
 # See the file CDDL.Schily.txt in this distribution for details.
+# A copy of the CDDL is also available via the Internet at
+# http://www.opensource.org/licenses/cddl1.txt
 #
 # When distributing Covered Code, include this CDDL HEADER in each
 # file and include the License file CDDL.Schily.txt from this distribution.
@@ -45,8 +47,8 @@ LN=		/bin/ln
 SYMLINK=	/bin/ln -s
 RM=		/bin/rm
 MV=		/bin/mv
-LORDER=		lorder
-TSORT=		tsort
+LORDER=		$(LORDER_PROG)
+TSORT=		$(TSORT_PROG)
 CTAGS=		vctags
 ETAGS=		etags
 UMASK=		umask $(UMASK_VAL)
@@ -61,6 +63,7 @@ RM_RF=		$(RM_RECURS) $(RM_FORCE)
 RM_F=		$(RM) $(RM_FORCE)
 
 INSMODEF_DEF=	444
+INSMODED_DEF=	755
 INSMODEX_DEF=	755
 INSUSR_DEF=	root
 INSGRP_DEF=	bin
@@ -76,6 +79,10 @@ UMASK_VAL=	$(__DEFUMASK:$(_UNIQ)%=%)
 _DEFINSMODEF=	$(_UNIQ)$(DEFINSMODEF)
 __DEFINSMODEF=	$(_DEFINSMODEF:$(_UNIQ)=$(INSMODEF_DEF))
 INSMODEF=	$(__DEFINSMODEF:$(_UNIQ)%=%)
+
+_DEFINSMODED=	$(_UNIQ)$(DEFINSMODED)
+__DEFINSMODED=	$(_DEFINSMODED:$(_UNIQ)=$(INSMODED_DEF))
+INSMODED=	$(__DEFINSMODED:$(_UNIQ)%=%)
 
 _DEFINSMODEX=	$(_UNIQ)$(DEFINSMODEX)
 __DEFINSMODEX=	$(_DEFINSMODEX:$(_UNIQ)=$(INSMODEX_DEF))
@@ -104,7 +111,9 @@ ARFLAGS=	cr
 RANLIB=		@echo "	==> RANDOMIZING ARCHIVE \"$@\""; true
 MKDEP=		@echo "	==> MAKING DEPENDENCIES \"$@\""; makedepend
 MKDEP_OUT=	-f -
+_MKDIR=		$(UMASK); mkdir
 MKDIR=		@echo "	==> MAKING DIRECTORY \"$@\""; $(UMASK); mkdir
+_MKDIR_SH=	$(UMASK); sh $(SRCROOT)/conf/mkdir-sh
 MKDIR_SH=	@echo "	==> MAKING DIRECTORY \"$@\""; $(UMASK); sh $(SRCROOT)/conf/mkdir-sh
 INSMKDIR=	@echo "	==> MAKING DIRECTORY \"$@\""; $(INSUMASK); mkdir
 INSMKDIR_SH=	@echo "	==> MAKING DIRECTORY \"$@\""; $(INSUMASK); sh $(SRCROOT)/conf/mkdir-sh

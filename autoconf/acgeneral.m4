@@ -1,4 +1,4 @@
-dnl @(#)acgeneral.m4	1.15 11/08/02 Copyright 1998-2011 J. Schilling
+dnl @(#)acgeneral.m4	1.17 16/03/22 Copyright 1998-2016 J. Schilling
 dnl
 dnl Parameterized macros.
 dnl Requires GNU m4.
@@ -55,7 +55,7 @@ divert(-1)dnl Throw away output until AC_INIT is called.
 changequote([, ])
 
 define(AC_ACVERSION, 2.13)
-define(AC_ACVERSION_SCHILY, 1.15-Schily)
+define(AC_ACVERSION_SCHILY, 1.17-Schily)
 
 dnl Some old m4's don't support m4exit.  But they provide
 dnl equivalent functionality by core dumping because of the
@@ -151,7 +151,7 @@ AC_DEFUN(AC_INIT_NOTICE,
 [# Guess values for system-dependent variables and create Makefiles.
 # Generated automatically using autoconf version] AC_ACVERSION AC_ACVERSION_SCHILY [
 # Copyright (C) 1992, 93, 94, 95, 96 Free Software Foundation, Inc.
-# Copyright (C) 1998-2011 J. Schilling
+# Copyright (C) 1998-2016 J. Schilling
 #
 # This configure script is free software; the Free Software Foundation
 # gives unlimited permission to copy, distribute and modify it.
@@ -1241,6 +1241,7 @@ ac_ext=c
 # CFLAGS is not in ac_cpp because -g, -O, etc. are not valid cpp options.
 ac_cpp='$CPP $CPPFLAGS'
 ac_compile='${CC-cc} -c $CFLAGS $CPPFLAGS conftest.$ac_ext 1>&AC_FD_CC'
+ac_compile2='${CC-cc} -c $CFLAGS $CPPFLAGS conftest2.$ac_ext 1>&AC_FD_CC'
 ac_link='${CC-cc} -o conftest${ac_exeext} $CFLAGS $CPPFLAGS conftest.$ac_ext $LDFLAGS $LIBS 1>&AC_FD_CC'
 cross_compiling=$ac_cv_prog_cc_cross
 if test "$cross_compiling" = yes -a "$CONFIG_RMTCALL" != NONE ; then
@@ -1257,6 +1258,7 @@ ac_ext=C
 # CXXFLAGS is not in ac_cpp because -g, -O, etc. are not valid cpp options.
 ac_cpp='$CXXCPP $CPPFLAGS'
 ac_compile='${CXX-g++} -c $CXXFLAGS $CPPFLAGS conftest.$ac_ext 1>&AC_FD_CC'
+ac_compile2='${CXX-g++} -c $CXXFLAGS $CPPFLAGS conftest2.$ac_ext 1>&AC_FD_CC'
 ac_link='${CXX-g++} -o conftest${ac_exeext} $CXXFLAGS $CPPFLAGS conftest.$ac_ext $LDFLAGS $LIBS 1>&AC_FD_CC'
 cross_compiling=$ac_cv_prog_cxx_cross
 if test "$cross_compiling" = yes -a "$CONFIG_RMTCALL" != NONE ; then
@@ -1271,6 +1273,7 @@ AC_DEFUN(AC_LANG_FORTRAN77,
 [define([AC_LANG], [FORTRAN77])dnl
 ac_ext=f
 ac_compile='${F77-f77} -c $FFLAGS conftest.$ac_ext 1>&AC_FD_CC'
+ac_compile2='${F77-f77} -c $FFLAGS conftest2.$ac_ext 1>&AC_FD_CC'
 ac_link='${F77-f77} -o conftest${ac_exeext} $FFLAGS conftest.$ac_ext $LDFLAGS $LIBS 1>&AC_FD_CC'
 cross_compiling=$ac_cv_prog_f77_cross
 if test "$cross_compiling" = yes -a "$CONFIG_RMTCALL" != NONE ; then
@@ -1298,10 +1301,20 @@ dnl ### Compiler-running mechanics
 
 dnl The purpose of this macro is to "configure:123: command line"
 dnl written into config.log for every test run.
+dnl
+dnl Note that previous versions of AC_TRY_EVAL did use () around the complete
+dnl eval commands. This causes unneeded sub-shells and reduces the performance
+dnl by 5% with a typical shell.
+dnl Given that the command passed to "eval" is in a shell variable, I/O
+dnl redirections and pipe calls in that variable are not parsed by the first
+dnl shell parser call but passed as textual arguments to the "eval" builtin and
+dnl then parsed inside "eval". For this reason there is no need for the () even
+dnl in case that the command contains an I/O redirection.
+dnl
 dnl AC_TRY_EVAL(VARIABLE)
 AC_DEFUN(AC_TRY_EVAL,
-[{ (eval echo configure:__oline__: \"[$]$1\") 1>&AC_FD_CC; dnl
-(eval [$]$1) 2>&AC_FD_CC; }])
+[{ eval echo configure:__oline__: \"[$]$1\" 1>&AC_FD_CC; dnl
+eval [$]$1 2>&AC_FD_CC; }])
 
 dnl AC_TRY_COMMAND(COMMAND)
 AC_DEFUN(AC_TRY_COMMAND,
@@ -1775,6 +1788,35 @@ ifelse([$4], , , [  rm -rf conftest*
 ])dnl
 fi
 rm -f conftest*])
+
+
+dnl AC_TRY_COMPILE2(INCLUDES, FUNCTION-BODY,
+dnl             [ACTION-IF-FOUND [, ACTION-IF-NOT-FOUND]])
+AC_DEFUN(AC_TRY_COMPILE2,
+[cat > conftest2.$ac_ext <<EOF
+ifelse(AC_LANG, [FORTRAN77],
+[      program main
+[$2]
+      end],
+[dnl This sometimes fails to find confdefs.h, for some reason.
+dnl [#]line __oline__ "[$]0"
+[#]line __oline__ "configure"
+#include "confdefs.h"
+[$1]
+int conffunc() {
+[$2]
+; return 0; }
+])EOF
+if AC_TRY_EVAL(ac_compile2); then
+  ifelse([$3], , :, [$3
+])
+else
+  echo "configure: failed program was:" >&AC_FD_CC
+  cat conftest.$ac_ext >&AC_FD_CC
+ifelse([$4], , , [$4
+])dnl
+fi
+])
 
 
 dnl ### Examining libraries

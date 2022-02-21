@@ -1,4 +1,4 @@
-#ident "@(#)rules.top	1.22 14/03/31 "
+#ident "@(#)rules.top	1.24 18/09/25 "
 ###########################################################################
 # Written 1996 by J. Schilling
 ###########################################################################
@@ -54,6 +54,30 @@ include 	$(DUMMY_LNK)
 #
 ###########################################################################
 COMPILE.c=
+
+###########################################################################
+#
+# SunPro make and gmake both include a COMPILE.cc in the built in rules.
+# Clear this here, to avoid trouble. We are still able to use COMPILE.cc=
+# command line macros to overwrite this.
+#
+###########################################################################
+COMPILE.cc=
+
+###########################################################################
+#
+# Various flags may be set in the default rules from various make programs
+# Clear this here, to avoid trouble. We are still able to use make command
+# line macros to overwrite this.
+#
+###########################################################################
+ARFLAGS=
+ASFLAGS=
+CFLAGS=
+CPPFLAGS=
+LDFLAGS=
+LFLAGS=
+YFLAGS=
 
 ###########################################################################
 #

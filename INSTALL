@@ -1,3 +1,5 @@
+# @(#)README.compile	1.40 18/09/17 Copyright 1997-2018 J. Schilling
+
 Short overview for those who don't read manuals:
 
 	Calling configure manually is outdated because this is a task of the
@@ -6,6 +8,17 @@ Short overview for those who don't read manuals:
 	There is no 'configure', simply call 'make' on the top level
 	directory.
 
+	*****
+	If you do not have a recent "smake" on your machine, you may first
+	need to compile and install a recent "smake".
+
+	In order to get a recent "smake" source, it is recommended to fetch
+	the "schilytools" tarball. If your local make program is not able to
+	automatically compile a bootstrap smake program in the "psmake"
+	directory from "schilytools", please read the file "BOOTSTRAP".
+	*****
+
+
 	***** If this does not work for you, read the rest if this file   *****
 	***** If you have any problem, also first read the topic specific *****
 	***** README.* files (e.g. README.linux for Linux problems).	  *****
@@ -13,7 +26,9 @@ Short overview for those who don't read manuals:
 	All results in general will be placed into a directory named 
 	OBJ/<arch-name>/ in the current projects leaf directory.
 
-	You **need** either my "smake" program, the SunPRO make 
+	You **need** either the Schily "smake" program, the SunPRO make
+	that is included in "schilytools" and typically installed in
+	/opt/schily/bin/make and /opt/schily/bin/dmake, the SunPRO make
 	from /usr/bin/make (SunOS 4.x) or /usr/ccs/bin/make (SunOS 5.x)
 	or GNU make to compile this program. Read READMEs/README.gmake for 
 	more information on gmake and a list of the most annoying bugs in gmake.
@@ -22,7 +37,7 @@ Short overview for those who don't read manuals:
 
 	My "smake" source is at:
 
-	ftp://ftp.berlios.de/pub/smake/alpha/
+	https://sourceforge.net/projects/s-make/files/
 
 	It is easy to compile and doesn't need a working make program
 	on your machine. If you don't have a working "make" program on the
@@ -31,9 +46,10 @@ Short overview for those who don't read manuals:
 	If you have the choice between all three make programs, the
 	preference would be 
 
-		1)	smake		(preferred)
-		2)	SunPRO make
-		3)	GNU make	(this is the last resort)
+		1)	smake			(preferred)
+		2)	Schily SunPRO make	(preferred over (3))
+		3)	SunPRO make
+		4)	GNU make		(this is the last resort)
 
 	Important notice: "smake" that comes with SGI/IRIX will not work!!!
 	This is not the Schily "smake" but a dumb make program from SGI.
@@ -41,6 +57,10 @@ Short overview for those who don't read manuals:
 	***** If you are on a platform that is not yet known by the	 *****
 	***** Schily makefilesystem you cannot use GNU make.		 *****
 	***** In this case, the automake features of smake are required. *****
+
+	Note that GNU make has major bugs on various platforms and thus cannot
+	be used at all on VMS and OS/2. GNU make on Cygwin causes problems
+	because it does not deal with spaces and newlines correctly.
 
 	Please read the README's for your operating system too.
 
@@ -56,14 +76,14 @@ Short overview for those who don't read manuals:
 
 	To unpack an archive, use:
 
-		gzip -d < some-arch.tar.gz | tar -xpf -
+		gzip -d < some-arch.tar.gz | tar xpf -
 
-	Replace 'star' by the actual archive name.
+	Replace 'some-arch.tar.gz' by the actual archive name.
 
 	If your platform does not support hard links or symbolic links, you
 	first need to compile "star" and then call:
 
-		star -xpz -copy-links < some-arch.tar.gz
+		star -xp -copy-links < some-arch.tar.gz
 
 	If your platform does not support hard links but supports
 	symbolic links, you only need to call the command above once.
@@ -87,10 +107,11 @@ PREFACE:
 	all needed targets. Calling 'make install' will install all needed
 	files.
 
-	This program uses a new makefilesystem. This makefilesystem uses
-	techniques and ideas from the 1980s and 1990s, is designed in a
-	modular way and allows sources to be combined in a modular way.
-	For mor information on the modular features read README.SSPM.
+	This program uses a new makefilesystem, introduced in 1993. This
+	makefilesystem uses techniques and ideas from the 1980s and 1990s,
+	is designed in a modular way and allows sources to be combined in a
+	modular way. For mor information on the modular features read
+	README.SSPM.
 
 	The makefilesystem is optimized for a program called 'smake'
 	Copyright 1985 by Jörg Schilling, but SunPro make (the make program
@@ -104,10 +125,10 @@ PREFACE:
 
 Finding Compilation Results:
 
-	To allow this, all binaries and results of a 'compilation' in any form
-	are placed in sub-directories. This includes automatically generated
-	include files. Results will in general be placed into
-	a directory named OBJ/<arch-name>/ in the current project's
+	To allow simultaneous compilations, all binaries and results of a
+	'compilation' in any form are placed in sub-directories. This includes
+	automatically generated include files. Results will in general be
+	placed into a directory named OBJ/<arch-name>/ in the current project's
 	leaf directory, libraries will be placed into a directory called
 	libs/<arch-name>/ that is located in the source tree root directory.
 
@@ -119,10 +140,50 @@ Finding Compilation Results:
 
 How to compile:
 
-	To compile a system or sub-system, simply enter 'smake', 'make' or 
-	'Gmake'. Compilation may be initialized at any point of the source
-	tree of a system. If compilation is started in a sub tree, all objects
-	in that sub tree will be made.
+	To compile a system or sub-system, simply enter 'smake', 'dmake', 'make'
+	or 'Gmake'. Compilation may be initialized at any point of the source
+	tree of a system.
+
+	WARNING: If compilation is started in a sub tree, only all objects
+	in that sub tree will be made. This usually excludes needed libraries.
+	NOTE: Compilation may not be started in a subdirectory unless a make
+	call from inside the directory "inc" has been run before.
+
+	NOTE: The "schilytools" source tree and the "smake" source tree come
+	with a "smake" bootstrap environment that uses Makefile as a trampoline
+	and SMakefile as the major makefile in the project root directory.
+	If you like to use a make program other than smake from the project
+	root directory without the bootstrap trampoline, use
+	"$MAKE -f SMakefile", e.g.
+
+		dmake -f SMakefile
+
+	On sub directories, "-f SMakefile" is neither needed nor useful.
+
+	Add other command line options or command line parameter if needed.
+
+
+How to compile in parallel mode:
+
+	The smake program does not yet support parallel compilation.
+
+	The dmake program supports parallel compilation. If you like the
+	default number of parallel jobs, just call 'dmake'. If you like
+	a different number, call 'dmake -j #', where # is the number of
+	parallel jobs.
+
+	Note that dmake collects the output from different jobs and prints
+	them in a way that does not interleave. For the Schily variant of
+	the dmake program, the Schily Makefilesystem by default disables the
+	job headers in the output. If you like to see them, call:
+
+		dmake DMAKE_OUTPUT_MODE=TXT1
+
+	The gmake program supports parallel mode, but does not separate the
+	output. If you get error or warning messages, you usually will be
+	confused by the mixture of the output. Recent gmake versions added
+	an option to separate the output from various jobs. Have a look
+	at the man page.
 
 
 How to install results:
@@ -149,14 +210,17 @@ How to install results:
 
 Using a different installation directory:
 
-	If your system does not yet use the standard installation path /opt
+	If your system does not yet use the standard installation path in
+
+		/opt/<vendor>
+
 	or if you don't like this installation directory, you can easily 
 	change the installation directory. You may edit the DEFAULTS file 
 	for your system and modify the macro INS_BASE.
 
 	You may  use a different installation directory without editing the
-	DEFAULTS files. If you like to install everything in /usr/local, call:
-
+	DEFAULTS files. If you like to install everything in the deprecated path
+	/usr/local, the next paragraph describes the procedure.
 
 	If your make program supports to propagate make macros to sub make programs
 	which is the case for recent smake releases as well as for a recent gnumake:
@@ -171,7 +235,7 @@ Using a different installation directory:
 		env INS_BASE=/usr/local make -e install
 
 	Note that INS_BASE=/usr/local needs to be specified for every operation
-	that compiles or links programs, as the path is stored inside the
+	that compiles or links programs, as the path may be stored inside the
 	binaries.
 
 	The location for the root specific configuratin files is controlled
@@ -220,11 +284,11 @@ Setting up a different Link mode:
 	instead.
 
 
-Compiling in a different ELF RUNPATH:
+Compiling a different ELF RUNPATH into the binaries:
 
 	In order to allow binaries to work correctly even if the shared
 	libraries are not in the default search path of the runtime linker,
-	a RUINPATH needs to be set.
+	a RUNPATH needs to be set.
 
 	The ELF RUNPATH is by default derived from $(INS_BASE). If you like to
 	set INS_BASE=/usr and create binaries that do not include a RUNPATH at all,
@@ -270,7 +334,7 @@ Installing to a prototype directory to implement package creation staging:
 	and then create a usr/local tree below /tmp (i.e. /tmp/usr/local).
 
 	Note that you need to call "smake clean" before in case that the code
-	was previously compiled with different defaults.
+	was previously compiled with different defaults with regards to INS_BASE
 
 Setting different default directory permissions for install directories:
 
@@ -293,12 +357,20 @@ Setting different default directory permissions for install directories:
 
 Using a different C compiler:
 
-	If the configured default compiler is not present on the current machine,
-	the makefilesystem will try an automatic fallback to GCC. For this reason,
-	in most cases, you will not need to manually select a compiler.
+	The *compiler family* is configured via the CCOM= make macro. This
+	selects a whole set of related macros that are needed to support a
+	specific compiler family.
 
-	The default C compiler can be modified in the files in the
-	DEFAULT directory. If you want to have a different compiler
+	The *compiler family* usually defines a C compiler and a related
+	C++ compiler.
+
+	If the configured default compiler family is not present on the current
+	machine, the makefilesystem will try an automatic fallback to GCC. For
+	this reason, in most cases, you will not need to manually select a
+	compiler.
+
+	The default compiler family can be modified in the files in the
+	DEFAULT directory. If you want to have a different compiler family
 	for one compilation, call:
 
 		make CCOM=gcc
@@ -318,8 +390,8 @@ Creating 64 bit executables on Solaris:
 
 	It is not clear if GCC already supports other platforms in 64 bit mode.
 	As all GCC versions before 3.1 did emit hundreds of compilation
-	warnings related to 64 bit bugs when compiling itself, there is little
-	hope that other platforms are already supported in 64 bit mode.
+	warnings related to 64 bit bugs when compiling itself, so there may be
+	other platforms are not supported in 64 bit mode.
 
 Creating executables using the Sun Studio compiler on Linux:
 
@@ -336,13 +408,48 @@ Creating executables using the Sun Studio compiler on Linux:
 	lines like: "#if defined(__GNUC__) && !defined(__STRICT_ANSI__)"
 	as well as the related #endif.
 
+Creating executables using the clang compiler:
+
+	Simply call:
+
+		make CCOM=clang
+
+	And in order to intentionally create 32 bit or 64 bit binaries, call:
+
+		make CCOM=clang64
+	or
+		make CCOM=clang64
 
 
-Getting help from make:
+Using a different compiler binary name:
+
+	Call:
+
+		make CC=/opt/instrumented/bin/cc
+
+	Note that all knowledge about the options of a compiler is derived
+	from the CCOM= variable, so if you like to use an instrumented gcc
+	variant, you may like to call:
+
+		make CCOM=gcc CC=fluffy-gcc
+
+	You may use CC="fluffy-gcc fluffy-gcc-specific options" if you like
+	to enforce specific options with the compiler. See hints on cross
+	compilation below.
+
+Avoiding to compile C++ based projects:
+
+	Call:
+		make C++BUILD=off
+
+
+Getting help from the make file system:
 
 	For a list of targets call:
 
 		make .help
+
+	.help is a special target that prints help for the makefile system.
 
 
 Getting more information on the make file system:
@@ -356,7 +463,7 @@ Getting more information on the make file system:
 
 	For further information read
 
-		ftp://ftp.berlios.de/pub/makefiles/PortableSoftware.ps.gz
+	http://sf.net/projects/schilytools/files/makefiles/PortableSoftware.ps.gz
 
 
 Hints for compilation:
@@ -376,8 +483,8 @@ Hints for compilation:
 		export MAKEPROG
 		exec gmake "$@"
 
-	and call 'Gmake' instead of gmake. On Linux, there is no gmake, 'make'
-	on Linux is really a gmake.
+	and call 'Gmake' instead of gmake. On Linux, there is no gmake, the
+	program installed as 'make' on Linux is really a gmake.
 
 	'Gmake' and 'Gmake.linux' are part of this distribution.
 
@@ -402,7 +509,7 @@ Hints for compilation:
 	If you like to use 'smake', please always compile it from source.
 	The packages are located on:
 
-		ftp://ftp.berlios.de/pub/smake/alpha/
+		https://sourceforge.net/projects/s-make/files/alpha/
 
 	Smake has a -D flag to see the actual makefile source used
 	and a -d flag that gives easy to read debugging info. Use smake -xM
@@ -424,6 +531,19 @@ Compiling the project using engineering defaults:
 
 		make DEFAULTSDIR=DEFAULTS_ENG
 
+	Note however, that some GCC versions print a lot of wrong warnings
+	in this mode. Well known problems with GCC warnings are:
+
+	-	The recursive printf format "%r" that is in use since ~ 1980
+		is not supported and causes a lot of incorrect warnings as
+		GCC does not know that "%r" takes 2 parameters.
+
+	-	The standard C construct "(void) read(fd, buf, sizeof (buf))"
+		is flagged by some versions of GCC even though the void cast
+		is a clear expression of the fact that the return code from read
+		is intentionally ignored. This may cause many useless warnings
+		for last resort error messages used in programs.
+
 
 Compiling the project to allow debugging with dbx/gdb:
 
@@ -440,7 +560,7 @@ Compiling the project to allow debugging with dbx/gdb:
 	or
 		 make "COPTX=-g -O0" LDOPTX=-g
 
-	depending on the option system of your C compiler.
+	depending on the option system used by your C compiler.
 
 
 Compiling the project to allow performance monitoring with gprof from BSD:
@@ -454,7 +574,7 @@ Compiling the project to allow performance monitoring with gprof from BSD:
 	or
 		make COPTX=-pg LDOPTX=-pg LINKMODE=profiled
 
-	depending on the option system of your C compiler.
+	depending on the option system used by your C compiler.
 
 
 Creating Blastwave packages:
@@ -476,7 +596,7 @@ Creating Blastwave packages:
 	If you want to see an example, please have a look at the "star"
 	source. It may be found on:
 
-		ftp://ftp.berlios.de/pub/star
+		http://sourceforge.net/projects/s-tar/files/
 
 	Have a look at the manual page, it is included in the distribution.
 	Install the manual page with 
@@ -497,12 +617,12 @@ Compiling in a cross compilation environment:
 	to run scripts on the target system for some of the tests.
 
 	The "configure" script that is delivered with the Schily makefile
-	system runs more than 770 tests and aprox 70 of them need to be 
+	system runs more than 770 tests and approx. 70 of them need to be 
 	run on the target system.
 
 	The Schily autoconf system now supports a method to run these ~70
-	tests natively on a target system. You either need a machine with
-	remote login features or you need an emulator with a method to
+	tests natively on a target system. You either need a target machine
+	with remote login features or you need an emulator with a method to
 	copy files into the emulated system and to run binaries on the
 	emulated system as e.g. the Android emulator.
 
@@ -531,7 +651,7 @@ Compiling in a cross compilation environment:
 				CONFIG_RMTHOST=user@hostname
 
 				use a dummy if you like to use something
-				like to the Android emulator.
+				like the Android emulator.
 
 	CONFIG_RMTDEBUG=	Set to something non-null in order to 
 				let the remote execution script mark
@@ -571,6 +691,7 @@ Compiling in a cross compilation environment:
 	OSREL=			# 5.11
 	OSVERSION=		# snv_130
 	CCOM=			# generic compiler name (e.g. "gcc")
+	CC=			# compiler to call (name for binary)
 	CC_COM=			# compiler to call (name + basic args)
 
 	ARCH=			overwrites M_ARCH and P_ARCH
@@ -578,12 +699,21 @@ Compiling in a cross compilation environment:
 	It is usually suffucient to set ARCH and OSNAME.
 
 	In order to use a cross compiler environment instead of a native compiler,
-	set the make macro CC_COM to something different than "cc".
+	set the make macro CC_COM or CC to something different than "cc".
 
 	If you are on Linux and like to compile for Android, do the following:
 
 	1) 	set up CC acording to the instructions from the cross compiler
-		tool chain
+		tool chain. Important: you need to read the information for your
+		tool chain. A working setup may look similar to:
+
+		NDK=/home/joerg/android-ndk-r7
+		SYSROOT=\$NDK/platforms/android-14/arch-arm
+		CC="\$NDK/toolchains/arm-linux-androideabi-4.4.3/prebuilt/linux-x86/bin/arm-linux-androideabi-gcc --sysroot=\$SYSROOT"
+		export NDK
+		export SYSROOT
+		export CC
+
 
 	2)	set environment variables CONFIG_RMTCALL / CONFIG_RMTHOST, e.g.:
 		setenv CONFIG_RMTCALL `pwd`/conf/runrmt_android
@@ -592,7 +722,90 @@ Compiling in a cross compilation environment:
 	3)	call smake:
 
 		smake ARCH=armv5 OSNAME=linux CCOM=gcc "CC_COM=$CC"
-	
+
+		or
+
+		smake ARCH=armv5 OSNAME=linux CCOM=gcc "CC=$CC"
+
+
+Compiling with the address sanitizer:
+
+	Be careful with a compiler enhancement called "addess sanitizer".
+
+	First a note: the address sanitizer needs a lot of memory when in
+	64-bit mode. For this reason, it is recommended to run the tests
+	in 32-bit mode as it may be impossible to provide a sufficient amount
+	of memory for the 64-bit mode.
+
+	1) The address sanitizer may cause autoconf to behave incorrectly in
+	case that the compiler options used by the "configure" run include the
+	address sanitizer. It seems that in addition, the address sanitizer
+	adds more libraries to the link list and as a result prevents
+	the correct autoconf decision on whether a specific library from
+	a "configure" test is needed by some binaries.
+
+	If you are not sure about the current state of the source tree, start
+	with calling:
+
+		./.clean
+
+	in the top level source directory. This makes the source tree to behave
+	as if if was recently unpacked from the tar archive.
+
+	Then run run e.g.:
+
+		cd inc/
+		smake CCOM=gcc32
+		cd ..
+
+	to prepare the auto-configuration without using the address sanitizer.
+	This special treatment is needed as the assumptions in the address
+	sanitizer would not allow us to run the autoconfiguration code
+	correctly.
+
+	2) The address sanitizer by default ignores installed SIGSEGV handlers
+	and thus ignores the intention of the author of the code.
+
+	The correct behavior may be switched on via setting the environment
+	variable:
+
+		ASAN_OPTIONS=allow_user_segv_handler=true
+
+	As a redult, the command line to compile the code after the
+	auto-configuration has been done as mentioned above is:
+
+	ASAN_OPTIONS=allow_user_segv_handler=true smake CCOM=gcc32 COPTX="-g -O0 -fsanitize=address" LDOPTX="-g -fsanitize=address" 
+
+	3) If you are on Linux, do not forget to call "ulimit -c unlimited",
+	before calling the binary. This is needed as the default on Linux is
+	not to create a core file.
+
+	4) Set the environment ASAN_OPTIONS= for the execution of the binary
+	to control the behavior of the Address Sanitizer while the binary
+	is run.
+
+	If you like to disable the memory leak detection because your program
+	is a short running program that intentionally does not free() resources
+	before calling exit(), use:
+
+		ASAN_OPTIONS=allow_user_segv_handler=true:detect_leaks=0
+
+	If you also like to get a core dump on error to debug, you may like
+	to use:
+
+		ASAN_OPTIONS=allow_user_segv_handler=true:detect_leaks=0:abort_on_error=1
+
+	Note that the Address Sanitizer disables the creation of a core file
+	for 64 bit binaries as the tables used by the Address Sanitizer may
+	cause the core file to have a size of 16 TB.
+
+
+Compiling with the "Americal fuzzy lop":
+
+	Follow the instruction from above for the address sanitizer, but
+	use this command line to call the compiler:
+
+	ASAN_OPTIONS=allow_user_segv_handler=true AFL_HARDEN=1 AFL_USE_ASAN=1 smake CC=afl-gcc CCOM=gcc32
 
 
 Author:
@@ -602,7 +815,6 @@ Seestr. 110
 D-13353 Berlin
 Germany
 
-Email: 	joerg@schily.isdn.cs.tu-berlin.de, js@cs.tu-berlin.de
-	joerg.schilling@fokus.fraunhofer.de
+Email: 	joerg.schilling@fokus.fraunhofer.de, joerg@schily.net
 
 Please mail bugs and suggestions to me.

@@ -1,14 +1,14 @@
-/* @(#)diff.c	1.88 13/11/05 Copyright 1993-2013 J. Schilling */
+/* @(#)diff.c	1.100 19/01/16 Copyright 1993-2019 J. Schilling */
 #include <schily/mconfig.h>
 #ifndef lint
 static	UConst char sccsid[] =
-	"@(#)diff.c	1.88 13/11/05 Copyright 1993-2013 J. Schilling";
+	"@(#)diff.c	1.100 19/01/16 Copyright 1993-2019 J. Schilling";
 #endif
 /*
  *	List differences between a (tape) archive and
  *	the filesystem
  *
- *	Copyright (c) 1993-2013 J. Schilling
+ *	Copyright (c) 1993-2019 J. Schilling
  */
 /*
  * The contents of this file are subject to the terms of the
@@ -35,6 +35,8 @@ static	UConst char sccsid[] =
 #include "props.h"
 #include "table.h"
 #include "diff.h"
+#define	GT_COMERR		/* #define comerr gtcomerr */
+#define	GT_ERROR		/* #define error gterror   */
 #include <schily/schily.h>
 #include <schily/dirent.h>	/* XXX Wegen S_IFLNK */
 #include "starsubs.h"
@@ -43,6 +45,8 @@ static	UConst char sccsid[] =
 #ifdef	USE_FIND
 #include <schily/walk.h>
 #endif
+
+#include <schily/nlsdefs.h>
 
 typedef	struct {
 	FILE	*cmp_file;
@@ -103,11 +107,14 @@ extern	struct WALK walkstate;
 #endif
 		FINFO	finfo;
 		TCB	tb;
-		char	name[PATH_MAX+1];
-		char	lname[PATH_MAX+1];
 	register TCB 	*ptb = &tb;
 
 	fillbytes((char *)&finfo, sizeof (finfo), '\0');
+
+	if (init_pspace(PS_STDERR, &finfo.f_pname) < 0)
+		return;
+	if (init_pspace(PS_STDERR, &finfo.f_plname) < 0)
+		return;
 
 	finfo.f_tcb = ptb;
 
@@ -129,8 +136,8 @@ extern	struct WALK walkstate;
 	}
 #endif
 	for (;;) {
-		finfo.f_name = name;
-		finfo.f_lname = lname;
+		finfo.f_name = finfo.f_pname.ps_path;
+		finfo.f_lname = finfo.f_plname.ps_path;
 		if (tcb_to_info(ptb, &finfo) == EOF)
 			break;
 #ifdef	USE_FIND
@@ -170,7 +177,7 @@ LOCAL void
 diff_tcb(info)
 	register FINFO	*info;
 {
-		char	lname[PATH_MAX+1];
+		char	lname[PATH_MAX+1]; /* This limit cannot be overruled */
 		TCB	tb;
 		FINFO	finfo;
 		FINFO	linfo;
@@ -179,6 +186,8 @@ diff_tcb(info)
 		BOOL	do_void = FALSE;	/* Make GCC happy */
 
 	f = tarf == stdout ? stderr : stdout; /* XXX FILE *vpr is the same */
+
+	fillbytes((char *)&finfo, sizeof (finfo), '\0');
 
 	finfo.f_lname = lname;
 	finfo.f_lnamelen = 0;
@@ -241,12 +250,17 @@ diff_tcb(info)
 	if ((diffopts & D_GID) && info->f_gid != finfo.f_gid) {
 		diffs |= D_GID;
 	}
+
+	/*
+	 * Note that uname/gname in the old star header are not always
+	 * null terminated.
+	 */
 	if ((diffopts & D_UNAME) && info->f_uname && finfo.f_uname) {
-		if (!streql(info->f_uname, finfo.f_uname))
+		if (strncmp(info->f_uname, finfo.f_uname, info->f_umaxlen))
 			diffs |= D_UNAME;
 	}
 	if ((diffopts & D_GNAME) && info->f_gname && finfo.f_gname) {
-		if (!streql(info->f_gname, finfo.f_gname))
+		if (strncmp(info->f_gname, finfo.f_gname, info->f_gmaxlen))
 			diffs |= D_GNAME;
 	}
 
@@ -269,7 +283,7 @@ diff_tcb(info)
 			;
 		} else {
 			if (debug) {
-				fprintf(f,
+				fgtprintf(f,
 				"%s: different filetype  %llo != %llo\n",
 				info->f_name,
 				(Ullong)info->f_type, (Ullong)finfo.f_type);
@@ -279,37 +293,57 @@ diff_tcb(info)
 	}
 
 	/*
-	 * XXX nsec beachten wenn im Archiv!
+	 * nsec beachten wenn im Archiv!
 	 */
 	if ((diffopts & D_ATIME) != 0) {
-		if (info->f_atime != finfo.f_atime)
+		if (info->f_atime != finfo.f_atime) {
 			diffs |= D_ATIME;
-
-#ifdef	should_we
-		if ((info->f_xflags & XF_ATIME) && (finfo.f_flags & F_NSECS) &&
-		    info->f_ansec != finfo.f_ansec)
-			diffs |= D_ATIME;
-#endif
+		} else if ((diffopts & D_ANTIME) != 0) {
+			if ((info->f_xflags & XF_ATIME) &&
+			    (finfo.f_flags & F_NSECS) &&
+			    info->f_ansec != finfo.f_ansec) {
+				diffs |= D_ANTIME;
+				if ((info->f_ansec % 1000 == 0 ||
+				    finfo.f_ansec % 1000 == 0) &&
+				    (info->f_ansec / 1000 ==
+				    finfo.f_ansec / 1000))
+					diffs &= ~D_ANTIME;
+			}
+		}
 	}
 	if ((diffopts & D_MTIME) != 0) {
 		if ((diffopts & D_LMTIME) != 0 || !is_symlink(&finfo)) {
-			if (info->f_mtime != finfo.f_mtime)
+			if (info->f_mtime != finfo.f_mtime) {
 				diffs |= D_MTIME;
-#ifdef	should_we
-			if ((info->f_xflags & XF_MTIME) && (finfo.f_flags & F_NSECS) &&
-			    info->f_mnsec != finfo.f_mnsec)
-				diffs |= D_MTIME;
-#endif
+			} else if ((diffopts & D_MNTIME) != 0) {
+				if ((info->f_xflags & XF_MTIME) &&
+				    (finfo.f_flags & F_NSECS) &&
+				    info->f_mnsec != finfo.f_mnsec) {
+					diffs |= D_MNTIME;
+					if ((info->f_mnsec % 1000 == 0 ||
+					    finfo.f_mnsec % 1000 == 0) &&
+					    (info->f_mnsec / 1000 ==
+					    finfo.f_mnsec / 1000))
+					diffs &= ~D_MNTIME;
+				}
+			}
 		}
 	}
 	if ((diffopts & D_CTIME) != 0) {
-		if (info->f_ctime != finfo.f_ctime)
+		if (info->f_ctime != finfo.f_ctime) {
 			diffs |= D_CTIME;
-#ifdef	should_we
-		if ((info->f_xflags & XF_CTIME) && (finfo.f_flags & F_NSECS) &&
-		    info->f_cnsec != finfo.f_cnsec)
-			diffs |= D_CTIME;
-#endif
+		} else if ((diffopts & D_CNTIME) != 0) {
+			if ((info->f_xflags & XF_CTIME) &&
+			    (finfo.f_flags & F_NSECS) &&
+			    info->f_cnsec != finfo.f_cnsec) {
+				diffs |= D_CNTIME;
+				if ((info->f_cnsec % 1000 == 0 ||
+				    finfo.f_cnsec % 1000 == 0) &&
+				    (info->f_cnsec / 1000 ==
+				    finfo.f_cnsec / 1000))
+				diffs &= ~D_CNTIME;
+			}
+		}
 	}
 
 	if ((diffopts & D_DIR) && is_dir(info) && info->f_dir &&
@@ -331,14 +365,23 @@ diff_tcb(info)
 		if ((finfo.f_ino != linfo.f_ino) ||
 		    (finfo.f_dev != linfo.f_dev)) {
 			if (debug || verbose)
-				fprintf(f, "%s: not linked to %s\n",
+				fgtprintf(f, "%s: not linked to %s\n",
 					info->f_name, info->f_lname);
 
 			diffs |= D_HLINK;
 		}
 	}
 #ifdef	S_IFLNK
+	/*
+	 * In case of a hardlinked symlink, we currently do not have the symlink
+	 * target path and thus cannot check the synlink target.
+	 */
+	if (!is_link(info))
 	if (((diffopts & (D_SLINK|D_SLPATH)) || verbose) && is_symlink(&finfo)) {
+		/*
+		 * XXX finfo.f_lname is static as the maximum symlink len
+		 * XXX is PATH_MAX.
+		 */
 		if (read_symlink(info->f_name, info->f_name, &finfo, &tb)) {
 			if ((diffopts & D_SLINK) && is_symlink(info) &&
 			    !linkeql(info->f_lname, finfo.f_lname)) {
@@ -384,7 +427,7 @@ diff_tcb(info)
 #endif
 		if (is_sparse(info) != ((finfo.f_flags & F_SPARSE) != 0)) {
 			if (debug || verbose) {
-				fprintf(f, "%s: %s not sparse\n",
+				fgtprintf(f, "%s: %s not sparse\n",
 					info->f_name,
 					is_sparse(info) ? "target":"source");
 			}
@@ -599,6 +642,8 @@ dirdiffs(f, info)
 		int	dlen = 0;
 		int	alen = 0;
 		BOOL	diffs = FALSE;
+		DIR	*dirp;
+		int	err;
 
 	/*
 	 * Old archives had only one nul at the end
@@ -612,17 +657,25 @@ dirdiffs(f, info)
 		info->f_dir[i-1] = '\0';	/* Kill '\n' */
 
 	ep1 = sortdir(info->f_dir, &ents1);	/* from archive */
-	dp2 = fetchdir(info->f_name, &ents2, 0, NULL);
+	dirp = lopendir(info->f_name);
+	if (dirp == NULL) {
+		dp2 = NULL;
+		err = geterrno();
+	} else {
+		dp2 = dfetchdir(dirp, info->f_name, &ents2, 0, NULL);
+		err = geterrno();
+		closedir(dirp);
+	}
 	if (dp2 == NULL) {
 		diffs = TRUE;
-		errmsg("Cannot read dir '%s'.\n", info->f_name);
+		errmsgno(err, "Cannot read dir '%s'.\n", info->f_name);
 		goto no_dircmp;
 	}
 	ep2 = sortdir(dp2, &ents2);		/* from disk */
 
 	if (ents1 != ents2) {
 		if (debug || verbose > 2) {
-			fprintf(f, "Archive ents: %d Disk ents: %d '%s'\n",
+			fgtprintf(f, "Archive ents: %d Disk ents: %d '%s'\n",
 					ents1, ents2, info->f_name);
 		}
 		diffs = TRUE;
@@ -637,11 +690,11 @@ dirdiffs(f, info)
 
 	if (debug || verbose > 1) {
 		for (i = 0; i < dlen; i++) {
-			fprintf(f, "Only on disk '%s': '%s'\n",
+			fgtprintf(f, "Only on disk '%s': '%s'\n",
 					info->f_name, od[i] + 1);
 		}
 		for (i = 0; i < alen; i++) {
-			fprintf(f, "Only in archive '%s': '%s'\n",
+			fgtprintf(f, "Only in archive '%s': '%s'\n",
 					info->f_name, oa[i] + 1);
 		}
 	}
@@ -708,7 +761,7 @@ cmp_file(info)
 #endif
 	}
 
-	if ((f = fileopen(info->f_name, "rub")) == (FILE *)NULL) {
+	if ((f = lfilemopen(info->f_name, "rub", S_IRWALL)) == (FILE *)NULL) {
 		if (!errhidden(E_OPEN, info->f_name)) {
 			if (!errwarnonly(E_OPEN, info->f_name))
 				xstats.s_openerrs++;
@@ -782,6 +835,12 @@ prdiffopts(f, label, flags)
 		prdopt(f, "ctime", printed++);
 	if (flags & D_LMTIME)
 		prdopt(f, "lmtime", printed++);
+	if (flags & D_ANTIME)
+		prdopt(f, "ansecs", printed++);
+	if (flags & D_MNTIME)
+		prdopt(f, "mnsecs", printed++);
+	if (flags & D_CNTIME)
+		prdopt(f, "cnsecs", printed++);
 	if (flags & D_DIR)
 		prdopt(f, "dir", printed++);
 #ifdef USE_ACL

@@ -1,6 +1,6 @@
-#ident "@(#)cc-gcc.rul	1.16 14/03/31 "
+#ident "@(#)cc-gcc.rul	1.20 18/08/16 "
 ###########################################################################
-# Written 1996-2014 by J. Schilling
+# Written 1996-2018 by J. Schilling
 ###########################################################################
 #
 # Platform independent MACROS for GCC
@@ -26,8 +26,8 @@ GCC_OPT32=	-m32
 GCC_OPT64=	-m64
 GCC_OPTXX=	$(GCC_OPT$(C_ARCH:gcc%=%))
 
-CPPFLAGS=	-DSCHILY_BUILD $(CPPOPTS) $(CPPOPTX) $(OSINCDIRS:%=-I%) $(OSDEFS) $(OSDEFSX)
-CFLAGS=		$(COPTS) $(CWARNOPTS) $(COPTOPT) $(GCCOPTOPT) $(COPTX)
+CPP_FLAGS=	-DSCHILY_BUILD $(CPPOPTS) $(CPPOPTX) $(OSINCDIRS:%=-I%) $(OSDEFS) $(OSDEFSX)
+C_FLAGS=	$(COPTS) $(CWARNOPTS) $(COPTOPT) $(GCCOPTOPT) $(COPTX)
 C++FLAGS=	$(C++OPTS) $(C++WARNOPTS) $(C++OPTOPT) $(G++OPTOPT) $(C++OPTX)
 
 CPPOPTS=	-I$(ARCHDIR) -I$(OINCSDIR) $(INCDIRS:%=-I%) $(INCDIRSX:%=-I%)
@@ -47,7 +47,9 @@ C++OPTGPROF=	-pg
 
 LIB_PREFIX=	lib
 LIB_SUFFIX=	.a
-SHL_SUFFIX=	.so.1
+SHL_SUFFIX=	.so.$(DYNMAJOR)
+
+LIB_C=		-lc
 
 LIBS_PATH=	-L$(OLIBSDIR)
 LIBS_PATH_STATIC= -L$(OLIBSDIR_STATIC) 

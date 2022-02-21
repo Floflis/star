@@ -1,8 +1,8 @@
-/* @(#)unistd.h	1.26 13/04/24 Copyright 1996-2013 J. Schilling */
+/* @(#)unistd.h	1.28 17/04/30 Copyright 1996-2017 J. Schilling */
 /*
  *	Definitions for unix system interface
  *
- *	Copyright (c) 1996-2013 J. Schilling
+ *	Copyright (c) 1996-2017 J. Schilling
  */
 /*
  * The contents of this file are subject to the terms of the
@@ -11,6 +11,8 @@
  * with the License.
  *
  * See the file CDDL.Schily.txt in this distribution for details.
+ * A copy of the CDDL is also available via the Internet at
+ * http://www.opensource.org/licenses/cddl1.txt
  *
  * When distributing Covered Code, include this CDDL HEADER in each
  * file and include the License file CDDL.Schily.txt from this distribution.
@@ -122,12 +124,12 @@
 #define	SEEK_END	2	/* Set file pointer to EOF plus "offset" */
 #endif
 
-#ifndef	HAVE_ENVIRON_DEF
-extern	char	**environ;
-#endif
-
 #ifdef	__cplusplus
 extern "C" {
+#endif
+
+#ifndef	HAVE_ENVIRON_DEF
+extern	char	**environ;
 #endif
 
 #if	!defined(HAVE_UNISTD_H) || !defined(_POSIX_VERSION)
@@ -135,7 +137,7 @@ extern "C" {
  * Maybe we need a lot more definitions here...
  * It is not clear whether we should have prototyped definitions.
  */
-#ifndef	_MSC_VER
+#if !defined(_MSC_VER) && !defined(__MINGW32__)
 /*
  * MS C comes with broken prototypes in wrong header files (in our case, the
  * wrong prototype is in io.h). Avoid to redefine the broken MS stuff with
@@ -150,7 +152,7 @@ extern	int	read	__PR((int, void *, size_t));
 extern	int	unlink	__PR((const char *));
 extern	int	write	__PR((int, const void *, size_t));
 #endif
-#ifndef	_MSC_VER
+#if !defined(_MSC_VER) && !defined(__MINGW32__)
 /*
  * MS C comes with broken prototypes in wrong header files (in our case, the
  * wrong prototype is in stdlib.h). Avoid to redefine the broken MS stuff with

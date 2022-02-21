@@ -1,6 +1,6 @@
-dnl @(#)configure.in	1.257 14/04/02 Copyright 1998-2014 J. Schilling
+dnl @(#)configure.in	1.294 19/03/18 Copyright 1998-2019 J. Schilling
 dnl Process this file with autoconf to produce a configure script.
-AC_REVISION(1.257)dnl
+AC_REVISION(1.294)dnl
 
 dnl AC_INIT(xconfig.h.in)
 AC_INIT(config.guess)
@@ -44,6 +44,18 @@ AC_PROG_RANLIB
 AC_PROG_MAKE_SET
 AC_CHECK_PROGS(YACC, yacc 'bison -y' byacc, noyacc)
 AC_CHECK_PROGS(BISON, bison, nobison)
+#
+# We need both tsort/lorder or none of them
+#
+AC_PATH_PROG(LORDER, lorder, echo, $PATH:/usr/ccs/bin)
+if test "$LORDER" = echo; then
+	TSORT=cat
+else
+	AC_PATH_PROG(TSORT, tsort, cat, $PATH:/usr/ccs/bin)
+	if test "$TSORT" = cat; then
+		LORDER=echo
+	fi
+fi
 
 dnl Checks for header files.
 AC_HEADER_STDC
@@ -62,6 +74,7 @@ dnl check whether select() needs sys/select.h
 AC_HEADER_SYS_SELECT
 dnl check whether select() needs sys/socket.h (BeOS)
 AC_HEADER_SELECT2
+AC_CHECK_HEADERS(ar.h)
 AC_CHECK_HEADERS(assert.h)
 AC_CHECK_HEADERS(stdio.h varargs.h stdarg.h stdlib.h stddef.h string.h strings.h unistd.h fcntl.h io.h sys/file.h)
 AC_CHECK_HEADERS(conio.h)
@@ -69,11 +82,12 @@ AC_CHECK_HEADERS(getopt.h)
 AC_CHECK_HEADERS(limits.h)
 AC_CHECK_HEADERS(a.out.h aouthdr.h elf.h)
 AC_CHECK_HEADERS(sysexits.h)
-AC_CHECK_HEADERS(malloc.h sgtty.h termios.h termio.h)
+AC_CHECK_HEADERS(malloc.h posix/malloc.h sgtty.h termios.h termio.h)
 AC_CHECK_HEADERS(pwd.h grp.h sys/acl.h aclutils.h acllib.h acl/libacl.h)
 AC_CHECK_HEADERS(signal.h siginfo.h sys/siginfo.h ucontext.h)
 AC_CHECK_HEADERS(shadow.h syslog.h)
 AC_CHECK_HEADERS(sys/time.h sys/times.h utime.h sys/utime.h sys/ioctl.h sys/filio.h sys/param.h sys/systeminfo.h sys/sysctl.h)
+AC_CHECK_HEADERS(sys/loadavg.h)
 AC_CHECK_HEADERS(sys/syscall.h)
 AC_CHECK_HEADERS(mach/machine.h)
 AC_CHECK_HEADERS(mntent.h sys/mntent.h sys/mnttab.h sys/mount.h)
@@ -82,16 +96,17 @@ AC_CHECK_HEADERS(ulimit.h)
 AC_CHECK_HEADERS(process.h)
 AC_CHECK_HEADERS(sys/utsname.h sys/priocntl.h sys/rtpriocntl.h sys/procset.h)
 AC_CHECK_HEADERS(sys/mtio.h sys/tape.h sys/mman.h linux/pg.h camlib.h)
-AC_CHECK_HEADERS(sys/shm.h sys/sem.h sys/ipc.h)
+AC_CHECK_HEADERS(sys/shm.h sys/sem.h sys/ipc.h semaphore.h)
 AC_CHECK_HEADERS(sys/dkio.h sys/dklabel.h sun/dkio.h sun/dklabel.h)
 AC_CHECK_HEADERS(sys/types.h sys/stat.h types.h stat.h)
 AC_CHECK_HEADERS(sys/stypes.h sys/filedesc.h)
 AC_CHECK_HEADERS(sys/acct.h)
 AC_CHECK_HEADERS(poll.h sys/poll.h sys/select.h)
-AC_CHECK_HEADERS(netdb.h sys/socket.h netinet/in.h stropts.h)
+AC_CHECK_HEADERS(netdb.h arpa/aixrcmds.h sys/socket.h netinet/in.h stropts.h)
 AC_CHECK_HEADERS(ieeefp.h fp.h)
 AC_CHECK_HEADERS(values.h float.h math.h)
 AC_CHECK_HEADERS(arpa/inet.h)
+AC_CHECK_HEADERS(rpc/rpc.h)
 AC_CHECK_HEADERS(bsd/dev/scsireg.h)
 dnl Check for HP-UX sys/bsdtty.h (needed for TIOCGPGRP)
 AC_CHECK_HEADERS(sys/bsdtty.h)
@@ -99,6 +114,7 @@ dnl Check for Linux kernel definitions
 AC_CHECK_HEADERS(scsi/scsi.h scsi/sg.h linux/scsi.h linux.sg.h)
 AC_CHECK_HEADERS(linux/types.h linux/gfp.h asm/types.h)
 AC_CHECK_HEADERS(sys/capability.h)
+AC_CHECK_HEADERS(selinux/selinux.h)
 dnl Check for BeOS kernel definitions (e.g. B_PAGE_SIZE)
 AC_CHECK_HEADERS(OS.h)
 dnl needed for newer OS/2 versions of EMX
@@ -107,8 +123,9 @@ AC_CHECK_HEADERS(os2me.h)
 dnl Check for MS-Win's junkyard
 AC_CHECK_HEADERS(windows.h)
 dnl Check for moving Linux targets caused by missing concepts
-AC_CHECK_HEADERS(ext2fs/ext2_fs.h)
+AC_CHECK_HEADERS(linux/fs.h ext2fs/ext2_fs.h)
 dnl Check for Linux Extended File Attributes definitions
+AC_CHECK_HEADERS(sys/xattr.h)
 AC_CHECK_HEADERS(attr/xattr.h)
 dnl Check for Mas OS X ac, av, env delarations
 AC_CHECK_HEADERS(crt_externs.h)
@@ -121,7 +138,8 @@ AC_CHECK_HEADERS(direct.h)
 AC_CHECK_HEADERS(pthread.h thread.h)
 AC_CHECK_HEADERS(libgen.h)
 AC_CHECK_HEADERS(regex.h regexp.h regexpr.h)
-AC_CHECK_HEADERS(dlfcn.h link.h dl.h)
+AC_CHECK_HEADERS(dlfcn.h link.h dl.h libelf.h)
+AC_CHECK_HEADERS(ranlib.h)
 AC_CHECK_HEADERS(expat.h)
 
 dnl from aclocal.m4 (uses AC_TRY_COMPILE)
@@ -138,6 +156,7 @@ AC_HEADER_USG_STDIO
 AC_HEADER_ERRNO_DEF
 AC_HEADER_ENVIRON_DEF
 AC_HEADER_SYS_SIGLIST_DEF
+AC_WNOWAIT_WAITPID
 
 dnl Checks for typedefs, structures, and compiler characteristics.
 AC_C_CONST
@@ -154,6 +173,27 @@ AC_TYPE_PROTOTYPES
 dnl AC_USER_MALLOC must be past AC_CHECK_FUNCS(strdup)
 AC_DYN_ARRAYS
 AC_PRAGMA_WEAK
+
+dnl This is a hack to compile two files and to check whether a weak alias from
+dnl one file can be seen in another file. The reason for this test is to detect
+dnl a bug on Cygwin that causes waek symbols to become "local" symbols that
+dnl are useless because they would be invisible for other parts of the code.
+
+if test $ac_cv_pragma_weak = yes; then
+AC_TRY_COMPILE2([#pragma weak weakname = conffunc],[],[true],[true])
+ac_save_LIBS="$LIBS"
+LIBS="conftest2.$ac_cv_objext"
+AC_CACHE_CHECK([if linker allows pragma weak], ac_cv_link_weak,
+                [AC_TRY_LINK([extern int weakname();],
+[return weakname();],
+                [ac_cv_link_weak=yes],
+                [ac_cv_link_weak=no])])
+LIBS="$ac_save_LIBS"
+if test $ac_cv_link_weak = yes; then
+  AC_DEFINE(HAVE_LINK_WEAK)
+fi
+rm -f conftest2.*
+fi
 
 AC_TYPE_UID_T
 AC_TYPE_SIZE_T
@@ -175,6 +215,11 @@ AC_CHECK_TYPE(blkcnt_t, Intmax_t)
 AC_TYPE_CLOCK_T
 AC_TYPE_SOCKLEN_T
 AC_HAVE_TYPE([#include <sys/frame.h>], greg_t)
+AC_HAVE_TYPE([#include <sys/resource.h>], rlim_t)
+dnl NetBSD-5 has an idtype_t that is in conflict with POSIX
+dnl AC_HAVE_TYPE([#include <sys/wait.h>], idtype_t)
+AC_TYPE_IDTYPE_T
+AC_HAVE_TYPE([#include <sys/wait.h>], siginfo_t)
 AC_TYPE_STACK_T
 AC_TYPE_SIGINFO_T
 
@@ -188,8 +233,8 @@ AC_CHECK_TYPE(u_int, unsigned int)
 AC_CHECK_TYPE(u_long, unsigned long)
 
 AC_INCL_CHECK_TYPE(
-#ifdef	HAVE_INTTYPES_H
-[#include <inttypes.h>
+[#ifdef	HAVE_INTTYPES_H
+#include <inttypes.h>
 #endif
 #ifdef	HAVE_STDINT_H
 #include <stdint.h>
@@ -197,8 +242,8 @@ AC_INCL_CHECK_TYPE(
 ], int8_t, Int8_t)
 
 AC_INCL_CHECK_TYPE(
-#ifdef	HAVE_INTTYPES_H
-[#include <inttypes.h>
+[#ifdef	HAVE_INTTYPES_H
+#include <inttypes.h>
 #endif
 #ifdef	HAVE_STDINT_H
 #include <stdint.h>
@@ -206,8 +251,8 @@ AC_INCL_CHECK_TYPE(
 ], int16_t, Int16_t)
 
 AC_INCL_CHECK_TYPE(
-#ifdef	HAVE_INTTYPES_H
-[#include <inttypes.h>
+[#ifdef	HAVE_INTTYPES_H
+#include <inttypes.h>
 #endif
 #ifdef	HAVE_STDINT_H
 #include <stdint.h>
@@ -215,8 +260,8 @@ AC_INCL_CHECK_TYPE(
 ], int32_t, Int32_t)
 
 AC_INCL_CHECK_TYPE(
-#ifdef	HAVE_INTTYPES_H
-[#include <inttypes.h>
+[#ifdef	HAVE_INTTYPES_H
+#include <inttypes.h>
 #endif
 #ifdef	HAVE_STDINT_H
 #include <stdint.h>
@@ -224,8 +269,8 @@ AC_INCL_CHECK_TYPE(
 ], int64_t, Int64_t)
 
 AC_INCL_CHECK_TYPE(
-#ifdef	HAVE_INTTYPES_H
-[#include <inttypes.h>
+[#ifdef	HAVE_INTTYPES_H
+#include <inttypes.h>
 #endif
 #ifdef	HAVE_STDINT_H
 #include <stdint.h>
@@ -233,8 +278,8 @@ AC_INCL_CHECK_TYPE(
 ], intmax_t, Intmax_t)
 
 AC_INCL_CHECK_TYPE(
-#ifdef	HAVE_INTTYPES_H
-[#include <inttypes.h>
+[#ifdef	HAVE_INTTYPES_H
+#include <inttypes.h>
 #endif
 #ifdef	HAVE_STDINT_H
 #include <stdint.h>
@@ -242,8 +287,8 @@ AC_INCL_CHECK_TYPE(
 ], intptr_t, Intptr_t)
 
 AC_INCL_CHECK_TYPE(
-#ifdef	HAVE_INTTYPES_H
-[#include <inttypes.h>
+[#ifdef	HAVE_INTTYPES_H
+#include <inttypes.h>
 #endif
 #ifdef	HAVE_STDINT_H
 #include <stdint.h>
@@ -251,8 +296,8 @@ AC_INCL_CHECK_TYPE(
 ], uint8_t, UInt8_t)
 
 AC_INCL_CHECK_TYPE(
-#ifdef	HAVE_INTTYPES_H
-[#include <inttypes.h>
+[#ifdef	HAVE_INTTYPES_H
+#include <inttypes.h>
 #endif
 #ifdef	HAVE_STDINT_H
 #include <stdint.h>
@@ -260,8 +305,8 @@ AC_INCL_CHECK_TYPE(
 ], uint16_t, UInt16_t)
 
 AC_INCL_CHECK_TYPE(
-#ifdef	HAVE_INTTYPES_H
-[#include <inttypes.h>
+[#ifdef	HAVE_INTTYPES_H
+#include <inttypes.h>
 #endif
 #ifdef	HAVE_STDINT_H
 #include <stdint.h>
@@ -269,8 +314,8 @@ AC_INCL_CHECK_TYPE(
 ], uint32_t, UInt32_t)
 
 AC_INCL_CHECK_TYPE(
-#ifdef	HAVE_INTTYPES_H
-[#include <inttypes.h>
+[#ifdef	HAVE_INTTYPES_H
+#include <inttypes.h>
 #endif
 #ifdef	HAVE_STDINT_H
 #include <stdint.h>
@@ -278,8 +323,8 @@ AC_INCL_CHECK_TYPE(
 ], uint64_t, UInt64_t)
 
 AC_INCL_CHECK_TYPE(
-#ifdef	HAVE_INTTYPES_H
-[#include <inttypes.h>
+[#ifdef	HAVE_INTTYPES_H
+#include <inttypes.h>
 #endif
 #ifdef	HAVE_STDINT_H
 #include <stdint.h>
@@ -287,8 +332,8 @@ AC_INCL_CHECK_TYPE(
 ], uintmax_t, UIntmax_t)
 
 AC_INCL_CHECK_TYPE(
-#ifdef	HAVE_INTTYPES_H
-[#include <inttypes.h>
+[#ifdef	HAVE_INTTYPES_H
+#include <inttypes.h>
 #endif
 #ifdef	HAVE_STDINT_H
 #include <stdint.h>
@@ -296,8 +341,8 @@ AC_INCL_CHECK_TYPE(
 ], uintptr_t, UIntptr_t)
 
 AC_INCL_CHECK_TYPE(
-#ifdef	HAVE_WCHAR_H
-[#include <wchar.h>
+[#ifdef	HAVE_WCHAR_H
+#include <wchar.h>
 #endif
 #ifdef	HAVE_WCTYPE_H
 #include <wctype.h>
@@ -305,13 +350,32 @@ AC_INCL_CHECK_TYPE(
 ], wctype_t, int)
 
 AC_INCL_CHECK_TYPE(
-#ifdef	HAVE_WCHAR_H
-[#include <wchar.h>
+[#ifdef	HAVE_WCHAR_H
+#include <wchar.h>
+#endif
+#ifdef	HAVE_WCTYPE_H
+#include <wctype.h>
+#endif
+#include <sys/types.h>
+], wint_t, int)
+
+AC_INCL_CHECK_TYPE(
+[#ifdef	HAVE_WCHAR_H
+#include <wchar.h>
 #endif
 #ifdef	HAVE_WCTYPE_H
 #include <wctype.h>
 #endif
 ], mbstate_t, int)
+
+AC_INCL_CHECK_TYPE(
+#ifdef	HAVE_SYS_STAT_H
+[#include <sys/stat.h>
+#endif
+#ifdef	HAVE_STAT_H
+#include <stat.h>
+#endif
+], timestruc_t, struct timespec)
 
 AC_CHECK_SIZEOF(char)
 AC_CHECK_SIZEOF(short int)
@@ -390,6 +454,7 @@ AC_STRUCT_ST_RDEV
 AC_STRUCT_ST_FLAG
 AC_STRUCT_ST_FLAGS
 AC_STRUCT_DIRENT_D_INO
+AC_STRUCT_DIRENT_D_TYPE
 AC_STRUCT_DIR_DD_FD
 AC_STRUCT_UTSNAME_ARCH
 AC_STRUCT_UTSNAME_PROCESSOR
@@ -439,8 +504,10 @@ AC_FUNC_C99_ISNAN
 AC_FUNC_SIGSETJMP
 AC_FUNC_SIGLONGJMP
 AC_FUNC_PRINTF_J
+AC_FUNC_PRINTF_Z
 AC_FUNC_PRINTF_LL
 AC_FUNC_REALLOC_NULL
+AC_FUNC_WAITID
 AC_CHECK_FUNCS(access eaccess euidaccess)
 AC_CHECK_FUNCS(memchr memcmp memcpy memccpy memmove memset)
 AC_CHECK_FUNCS(brk sbrk strerror nice flock lockf fchdir statvfs quotactl)
@@ -459,7 +526,9 @@ AC_CHECK_FUNCS(getgrnam getgrent getgrgid setgrent endgrent)
 dnl			getspwnam() on HP-UX is in libsec.a
 AC_CHECK_FUNCS(getspnam getspwnam)
 AC_CHECK_FUNCS(getlogin)
-AC_CHECK_FUNCS(sync fsync fork forkx vforkx forkall forkallx wait wait4 waitid waitpid getrusage getrlimit setrlimit ulimit)
+dnl Cannot simply include "waitid" here as the so called POSIX compliant
+dnl Mac OS X comes with a completely broken waitid() implementation.
+AC_CHECK_FUNCS(sync fsync fork forkx vforkx forkall forkallx wait wait4 wait6 waitpid getrusage getrlimit setrlimit ulimit)
 AC_CHECK_FUNCS(execl execle execlp execv execve execvp)
 AC_CHECK_FUNCS(spawnl spawnle spawnlp spawnlpe)
 AC_CHECK_FUNCS(spawnv spawnve spawnvp spawnvpe)
@@ -467,6 +536,7 @@ AC_CHECK_FUNCS(cwait)
 AC_CHECK_FUNCS(getexecname)
 AC_CHECK_FUNCS(getprogname setprogname)
 AC_CHECK_FUNCS(proc_pidpath)
+AC_CHECK_FUNCS(getloadavg)
 AC_CHECK_FUNCS(gethostid gethostname getdomainname getdtablesize)
 AC_CHECK_FUNCS(gettimeofday settimeofday time stime gethrtime)
 AC_CHECK_FUNCS(ftime tzset mktime gmtime localtime timegm timelocal)
@@ -506,10 +576,12 @@ dnl This are POSIX extensions not found on Solaris 10
 AC_CHECK_FUNCS(mkdirat faccessat fchmodat linkat mkfifoat mknodat readlinkat symlinkat)
 AC_CHECK_FUNCS(pipe _pipe)
 AC_CHECK_FUNCS(popen pclose _popen _pclose)
+AC_CHECK_FUNCS(closefrom)
 AC_CHECK_FUNCS(strsignal str2sig sig2str)
 AC_CHECK_FUNCS(kill killpg)
 AC_CHECK_FUNCS(signal sighold sigrelse sigignore sigpause sigprocmask sigsetmask sigset sigaltstack sigblock)
 AC_CHECK_FUNCS(alarm sleep usleep yield)
+AC_CHECK_FUNCS(atexit on_exit)
 dnl tcgetattr and tcsetattr are a inline functions in termios.h on Android
 AC_CHECK_DFUNC([
 #ifdef	HAVE_TERMIOS_H
@@ -521,9 +593,10 @@ AC_CHECK_DFUNC([
 #include <termios.h>
 #endif
 ], tcsetattr)
-AC_CHECK_FUNCS(tcgetpgrp tcsetpgrp)
+AC_CHECK_FUNCS(tcgetpgrp tcsetpgrp tcgetsid)
 AC_CHECK_FUNCS(getenv putenv setenv unsetenv)
 AC_CHECK_FUNCS(snprintf strcasecmp strncasecmp)
+AC_CHECK_FUNCS(vprintf vfprintf vsprintf vsnprintf)
 
 AC_CHECK_DFUNCS([
 #ifdef	HAVE_STRING_H
@@ -585,6 +658,21 @@ AC_CHECK_DFUNC([
 #include <wctype.h>
 #endif
 ], iswprint)
+
+AC_CHECK_DFUNC([
+#ifdef	HAVE_WCHAR_H
+#include <wchar.h>
+#endif
+#ifdef	HAVE_WCTYPE_H
+#include <wctype.h>
+#endif
+], iswblank)
+
+AC_CHECK_DFUNC([
+#ifdef	HAVE_CTYPE_H
+#include <ctype.h>
+#endif
+], isblank)
 
 AC_CHECK_DFUNC([
 #ifdef	HAVE_WCHAR_H
@@ -674,14 +762,19 @@ AC_CHECK_DFUNCS([
 
 dnl ??? AC_CHECK_LIB(socket, socket, lib_socket="-lsocket")
 dnl
-AC_CHECK_LIB(socket, rcmd, lib_socket="-lsocket")
 ac_save_LIBS="$LIBS"
-LIBS="$LIBS $lib_socket"
-AC_CHECK_LIB(nsl, inet_ntoa, lib_nsl="-lnsl")
-LIBS="$LIBS $lib_nsl"
+AC_CHECK_LIB(c, socket, lib_socket="",
+  [AC_CHECK_LIB(socket, socket, lib_socket="-lsocket")])
+LIBS="$ac_save_LIBS"
+AC_CHECK_LIB(c, gethostbyname, lib_nsl="",
+  [AC_CHECK_LIB(nsl, gethostbyname, lib_nsl="-lnsl",
+    [AC_CHECK_LIB(network, gethostbyname, lib_nsl="-lnetwork")])])
+LIBS="$ac_save_LIBS"
+LIBS="$LIBS $lib_nsl $lib_socket"
 AC_CHECK_FUNCS(rcmd socket socketpair)
 AC_CHECK_FUNCS(getservbyname inet_ntoa)
 AC_CHECK_FUNCS(getaddrinfo getnameinfo)
+AC_CHECK_FUNCS(host2netname netname2host)
 LIBS="$ac_save_LIBS"
 
 ac_save_LIBS="$LIBS"
@@ -851,9 +944,10 @@ if test "$ac_cv_header_sys_acl_h" = yes; then
 
 fi
 
-if test "$ac_cv_header_attr_xattr_h" = yes; then
+if test "$ac_cv_header_attr_xattr_h" = yes || test "$ac_cv_header_sys_xattr_h" = yes; then
   AC_CHECKING(for Linux flavor Extended Attribute support)
-  AC_CHECK_LIB(attr, getxattr, lib_attr="-lattr")
+  AC_CHECK_LIB(c, getxattr, lib_rt="",
+	[AC_CHECK_LIB(attr, getxattr, lib_attr="-lattr")])
   ac_save_LIBS="$LIBS"
   LIBS="$LIBS $lib_attr"
   AC_CHECK_FUNCS(getxattr setxattr listxattr lgetxattr lsetxattr llistxattr)
@@ -874,10 +968,24 @@ LIBS="$LIBS $lib_gen"
 AC_CHECK_FUNCS(gmatch)
 LIBS="$ac_save_LIBS"
 
+AC_CHECKING(for ELF support)
+AC_CHECK_LIB(elf, elf_begin, lib_elf="-lelf")
+ac_save_LIBS="$LIBS"
+LIBS="$LIBS $lib_elf"
+AC_CHECK_FUNCS(elf_begin)
+LIBS="$ac_save_LIBS"
+
 AC_CHECK_FUNCS(thr_yield)
 
-AC_CHECK_LIB(pthread, pthread_create, lib_pthread="-lpthread",
-  [AC_CHECK_LIB(c, pthread_create, lib_pthread="")])
+dnl AC_CHECK_LIB(c, sem_post, lib_sem="",
+dnl   [AC_CHECK_LIB(pthread, sem_post, lib_sem="-lpthread")])
+dnl ac_save_LIBS="$LIBS"
+dnl LIBS="$LIBS $lib_sem"
+dnl AC_CHECK_FUNCS(sem_post)
+dnl LIBS="$ac_save_LIBS"
+
+AC_CHECK_LIB(c, pthread_create, lib_pthread="",
+  [AC_CHECK_LIB(pthread, pthread_create, lib_pthread="-lpthread")])
 
 ac_save_LIBS="$LIBS"
 LIBS="$LIBS $lib_pthread"
@@ -906,11 +1014,31 @@ LIBS="$LIBS $lib_cap"
 AC_CHECK_FUNCS(cap_get_proc cap_set_proc cap_set_flag cap_clear_flag)
 LIBS="$ac_save_LIBS"
 
+if test "$ac_cv_header_selinux_selinux_h" = yes; then
+	AC_CHECKING(for SELinux support)
+	ac_save_LIBS="$LIBS"
+	LIBS="$LIBS $lib_attr"
+	AC_CHECK_LIB(selinux, is_selinux_enabled, lib_selinux="-lselinux")
+	LIBS="$ac_save_LIBS"
+	LIBS="$LIBS $lib_selinux $lib_attr"
+	AC_CHECK_FUNCS(is_selinux_enabled)
+	LIBS="$ac_save_LIBS"
+fi
+
 dnl Misc OS checks.
-AC_CHECK_FILES(/dev/tty /dev/null /dev/zero)
-AC_CHECK_FILES(/dev/stdin /dev/stdout /dev/stderr)
-AC_CHECK_FILES(/dev/fd/0 /dev/fd/1 /dev/fd/2)
-AC_CHECK_FILES(/usr/src/linux/include)
+dnl
+dnl WARNING: AC_CHECK_FILES uses "test -r file" and bash on Haiku returns wrong results
+dnl for /dev/stdin /dev/stdout /dev/stderr /dev/fd/0 /dev/fd/1 /dev/fd/2
+dnl For this reason, we rather use AC_STAT_FILES
+dnl AC_CHECK_FILES(/dev/tty /dev/null /dev/zero)
+dnl AC_CHECK_FILES(/dev/stdin /dev/stdout /dev/stderr)
+dnl AC_CHECK_FILES(/dev/fd/0 /dev/fd/1 /dev/fd/2)
+dnl AC_CHECK_FILES(/usr/src/linux/include)
+
+AC_STAT_FILES(/dev/tty /dev/null /dev/zero)
+AC_STAT_FILES(/dev/stdin /dev/stdout /dev/stderr)
+AC_STAT_FILES(/dev/fd/0 /dev/fd/1 /dev/fd/2)
+AC_STAT_FILES(/usr/src/linux/include /usr/xpg4/bin/sh /opt/schily/xpg4/bin/sh)
 
 dnl Checks for OS madness.
 UNAME=`uname || true`
@@ -962,6 +1090,8 @@ if test .$ac_cv_usable_linux_ext2_fs_h = .no; then
 	echo "Warning: *** This makes it impossible to support Linux file flags ***"
 	echo "You may try to compile using 'make COPTX=-DTRY_EXT2_FS'"
 	echo
+	echo "Better install the ext2 developer package"
+	echo
 	sleep 10
 fi
 fi	# <ext2fs/ext2_fs.h> was missing
@@ -983,6 +1113,7 @@ AC_SUBST(lib_expat)
 AC_SUBST(lib_pcsc)
 AC_SUBST(lib_crypto)
 AC_SUBST(lib_ssl)
+AC_SUBST(lib_nsl)
 AC_SUBST(scsi_lib)
 AC_SUBST(lib_scsi)
 AC_SUBST(lib_acl)
@@ -990,10 +1121,12 @@ AC_SUBST(lib_acl_test)
 AC_SUBST(lib_attr)
 AC_SUBST(lib_secdb)
 AC_SUBST(lib_gen)
+AC_SUBST(lib_elf)
 AC_SUBST(lib_pthread)
 AC_SUBST(lib_rt)
 AC_SUBST(lib_dl)
 AC_SUBST(lib_dir)
 AC_SUBST(lib_cap)
+AC_SUBST(lib_selinux)
 
 AC_OUTPUT(rules.cnf)

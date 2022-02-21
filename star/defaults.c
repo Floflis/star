@@ -1,11 +1,11 @@
-/* @(#)defaults.c	1.13 09/07/11 Copyright 1998-2009 J. Schilling */
+/* @(#)defaults.c	1.17 18/07/10 Copyright 1998-2018 J. Schilling */
 #include <schily/mconfig.h>
 #ifndef lint
 static	UConst char sccsid[] =
-	"@(#)defaults.c	1.13 09/07/11 Copyright 1998-2009 J. Schilling";
+	"@(#)defaults.c	1.17 18/07/10 Copyright 1998-2018 J. Schilling";
 #endif
 /*
- *	Copyright (c) 1998-2009 J. Schilling
+ *	Copyright (c) 1998-2018 J. Schilling
  */
 /*
  * The contents of this file are subject to the terms of the
@@ -14,6 +14,8 @@ static	UConst char sccsid[] =
  * with the License.
  *
  * See the file CDDL.Schily.txt in this distribution for details.
+ * A copy of the CDDL is also available via the Internet at
+ * http://www.opensource.org/licenses/cddl1.txt
  *
  * When distributing Covered Code, include this CDDL HEADER in each
  * file and include the License file CDDL.Schily.txt from this distribution.
@@ -26,6 +28,8 @@ static	UConst char sccsid[] =
 #include <schily/standard.h>
 #include <schily/deflts.h>
 #include <schily/utypes.h>
+#define	GT_COMERR		/* #define comerr gtcomerr */
+#define	GT_ERROR		/* #define error gterror   */
 #include <schily/schily.h>
 #include "star.h"
 #include "starsubs.h"
@@ -35,16 +39,23 @@ extern	long		bs;
 extern	int		nblocks;
 extern	BOOL		not_tape;
 extern	Ullong		tsize;
+extern	BOOL		silent;
+extern	BOOL		print_artype;
+extern	BOOL		xflag;
+extern	BOOL		nflag;
 
 EXPORT	char	*get_stardefaults __PR((char *name));
 LOCAL	int	open_stardefaults __PR((char *dfltname));
-EXPORT	void	star_defaults	__PR((long *fsp, char *dfltname));
+EXPORT	void	star_defaults	__PR((long *fsp, BOOL *no_fsyncp,
+						char *dfltname));
 EXPORT	BOOL	star_darchive	__PR((char *arname, char *dfltname));
 
 EXPORT char *
 get_stardefaults(name)
 	char	*name;
 {
+	char	*ret;
+
 	if (name)
 		return (name);
 	/*
@@ -59,7 +70,14 @@ get_stardefaults(name)
 	 * don't contribute work and don't give support, they are causing extra
 	 * work for me and this way slow down the star development.
 	 */
-	return ("/etc/default/star");
+#if defined(PROTOTYPES) && defined(INS_RBASE)
+	ret = INS_RBASE "/etc/default/star";
+	while (ret[0] == '/' && ret[1] == '/')
+		ret++;
+#else
+	ret = "/etc/default/star";
+#endif
+	return (ret);
 }
 
 LOCAL int
@@ -73,10 +91,13 @@ open_stardefaults(dfltname)
 }
 
 EXPORT void
-star_defaults(fsp, dfltname)
+star_defaults(fsp, no_fsyncp, dfltname)
 	long	*fsp;
+	BOOL	*no_fsyncp;
 	char	*dfltname;
 {
+	BOOL	is_open = FALSE;
+	BOOL	nofsync = FALSE;
 	long	fs_cur	= 0L;
 	long	fs_max	= -1L;
 
@@ -89,6 +110,7 @@ star_defaults(fsp, dfltname)
 		char	*p = NULL;
 
 		if (open_stardefaults(dfltname) == 0) {
+			is_open = TRUE;
 			p = defltread("STAR_FIFOSIZE=");
 		}
 		if (p) {
@@ -99,9 +121,13 @@ star_defaults(fsp, dfltname)
 	if (fs_cur > 0L) {
 		char	*p = NULL;
 
-		if (open_stardefaults(dfltname) == 0) {
-			p = defltread("STAR_FIFOSIZE_MAX=");
+		if (is_open) {
+			defltfirst();
+		} else if (open_stardefaults(dfltname) == 0) {
+			is_open = TRUE;
 		}
+		if (is_open)
+			p = defltread("STAR_FIFOSIZE_MAX=");
 		if (p) {
 			if (getnum(p, &fs_max) != 1) {
 				comerrno(EX_BAD,
@@ -114,6 +140,42 @@ star_defaults(fsp, dfltname)
 
 	if (fs_cur > 0L && fsp != NULL)
 		*fsp = fs_cur;
+
+	if (no_fsyncp)
+		nofsync = *no_fsyncp;
+	if (nofsync < 0) {
+		char	*p = NULL;
+		BOOL	was_env = FALSE;
+
+		p = getenv("STAR_FSYNC");
+		if (p == NULL) {
+			if (is_open) {
+				defltfirst();
+			} else if (open_stardefaults(dfltname) == 0) {
+				is_open = TRUE;
+			}
+			if (is_open)
+				p = defltread("STAR_FSYNC=");
+		} else {
+			was_env = TRUE;
+		}
+		if (p) {
+			while (*p == ' ' || *p == '\t')
+				p++;
+			if (*p == 'n' || *p == 'N') {
+				nofsync = TRUE;
+				if (!silent && !print_artype && xflag && !nflag)
+					errmsgno(EX_BAD,
+					"WARNING: fsync() disabled from '%s'.\n",
+					was_env ? "environment" :
+					dfltname);
+			} else {
+				nofsync = FALSE;
+			}
+		}
+	}
+	if (no_fsyncp && nofsync >= 0)
+		*no_fsyncp = nofsync;
 
 	defltclose();
 }

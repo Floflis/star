@@ -1,14 +1,14 @@
-/* @(#)table.c	1.27 10/08/23 Copyright 1994-96 2000-2010 J. Schilling */
+/* @(#)table.c	1.30 17/02/08 Copyright 1994-96 2000-2017 J. Schilling */
 #include <schily/mconfig.h>
 #ifndef lint
 static	UConst char sccsid[] =
-	"@(#)table.c	1.27 10/08/23 Copyright 1994-96 2000-2010 J. Schilling";
+	"@(#)table.c	1.30 17/02/08 Copyright 1994-96 2000-2017 J. Schilling";
 #endif
 /*
  *	Conversion tables for efficient conversion
  *	of different file type representations
  *
- *	Copyright (c) 1994-96 2000-2010 J. Schilling
+ *	Copyright (c) 1994-96 2000-2017 J. Schilling
  */
 /*
  * The contents of this file are subject to the terms of the
@@ -17,6 +17,8 @@ static	UConst char sccsid[] =
  * with the License.
  *
  * See the file CDDL.Schily.txt in this distribution for details.
+ * A copy of the CDDL is also available via the Internet at
+ * http://www.opensource.org/licenses/cddl1.txt
  *
  * When distributing Covered Code, include this CDDL HEADER in each
  * file and include the License file CDDL.Schily.txt from this distribution.
@@ -45,8 +47,8 @@ static	UConst char sccsid[] =
 #ifndef	S_IFMPB			/* If system knows no multiplexed b	*/
 #define	S_IFMPB		S_IFREG	/* Map multiplexed b to regular files	*/
 #endif
-#ifndef	S_IFCNT			/* If system knows no contiguous files	*/
-#define	S_IFCNT		S_IFREG	/* Map contiguous file to regular files */
+#ifndef	S_IFCTG			/* If system knows no contiguous files	*/
+#define	S_IFCTG		S_IFREG	/* Map contiguous file to regular files */
 #endif
 #ifndef	S_IFLNK			/* If system knows no symbolic links	*/
 #define	S_IFLNK		S_IFREG	/* Map symbolic links to regular files */
@@ -91,7 +93,7 @@ static	UConst char sccsid[] =
  * No bound checking in hope that S_IFMT will never hold more than 4 bits.
  */
 /* BEGIN CSTYLED */
-char	iftoxt_tab[] = {
+UInt8_t	iftoxt_tab[] = {
 		/* 0 */	XT_NONE, XT_FIFO, XT_CHR,   XT_MPC,
 		/* 4 */	XT_DIR,  XT_NAM,  XT_BLK,   XT_MPB,
 		/* 8 */	XT_FILE, XT_CONT, XT_SLINK, XT_BAD,
@@ -105,7 +107,7 @@ char	iftoxt_tab[] = {
  * Maps the ustar 0..7 filetypes to star's internal XT_ types.
  * Bound checking is done via ustoxt().
  */
-char	ustoxt_tab[] = {
+UInt8_t	ustoxt_tab[] = {
 		/* 0 */	XT_FILE, XT_LINK, XT_SLINK, XT_CHR,
 		/* 4 */	XT_BLK,  XT_DIR,  XT_FIFO,  XT_CONT,
 		/* 8 */	XT_BAD,  XT_BAD,
@@ -119,7 +121,7 @@ char	ustoxt_tab[] = {
  * External code does bound checking.
  */
 /* BEGIN CSTYLED */
-char	vttoxt_tab[] = {
+UInt8_t	vttoxt_tab[] = {
 		/* A */	XT_NONE,     XT_NONE,   XT_NONE,     XT_DUMPDIR,
 		/* E */	XT_NONE,     XT_NONE,   XT_NONE,     XT_NONE,
 		/* I */	XT_META,     XT_NONE,   XT_LONGLINK, XT_LONGNAME,
@@ -144,7 +146,7 @@ char	vttoxt_tab[] = {
  */
 /* BEGIN CSTYLED */
 mode_t	xttoif_tab[] = {
-		/* 0 */	0,       S_IFREG,  S_IFCNT, S_IFREG,
+		/* 0 */	0,       S_IFREG,  S_IFCTG, S_IFREG,
 		/* 4 */	S_IFLNK, S_IFDIR,  S_IFCHR, S_IFBLK,
 		/* 8 */	S_IFIFO, S_IFSOCK, S_IFMPC, S_IFMPB,
 		/*12 */	S_IFNAM, S_IFNAM,  S_IFDOOR, S_IFEVC,
@@ -159,7 +161,7 @@ mode_t	xttoif_tab[] = {
  * XT_ to Star-1985 File type table
  */
 /* BEGIN CSTYLED */
-char	xttost_tab[] = {
+UInt8_t	xttost_tab[] = {
 		/* 0 */	0,       F_FILE, F_FILE, F_FILE,
 		/* 4 */	F_SLINK, F_DIR,  F_SPEC, F_SPEC,
 		/* 8 */	F_SPEC,  F_SPEC, F_SPEC, F_SPEC,
@@ -175,7 +177,7 @@ char	xttost_tab[] = {
  * XT_ Old UNIX V7 tar supported File type table
  */
 /* BEGIN CSTYLED */
-char	xtv7tar_tab[] = {
+UInt8_t	xtv7tar_tab[] = {
 		/* 0 */	0,	1,	1,	1,
 		/* 4 */	0,	0,	0,	0,
 		/* 8 */	0,	0,	0,	0,
@@ -191,7 +193,7 @@ char	xtv7tar_tab[] = {
  * XT_ Old BSD tar supported File type table
  */
 /* BEGIN CSTYLED */
-char	xttar_tab[] = {
+UInt8_t	xttar_tab[] = {
 		/* 0 */	0,	1,	1,	1,
 		/* 4 */	1,	1,	0,	0,
 		/* 8 */	0,	0,	0,	0,
@@ -207,7 +209,7 @@ char	xttar_tab[] = {
  * XT_ Star-1985 supported File type table
  */
 /* BEGIN CSTYLED */
-char	xtstar_tab[] = {
+UInt8_t	xtstar_tab[] = {
 		/* 0 */	0,	1,	1,	1,
 		/* 4 */	1,	1,	1,	1,
 		/* 8 */	1,	1,	1,	1,
@@ -223,7 +225,7 @@ char	xtstar_tab[] = {
  * XT_ Ustar-1988 supported File type table
  */
 /* BEGIN CSTYLED */
-char	xtustar_tab[] = {
+UInt8_t	xtustar_tab[] = {
 		/* 0 */	0,	1,	1,	1,
 		/* 4 */	1,	1,	1,	1,
 		/* 8 */	1,	0,	0,	0,
@@ -239,7 +241,7 @@ char	xtustar_tab[] = {
  * XT_ Extended PAX-2001 'exustar' supported File type table
  */
 /* BEGIN CSTYLED */
-char	xtexustar_tab[] = {
+UInt8_t	xtexustar_tab[] = {
 		/* 0 */	0,	1,	1,	1,
 		/* 4 */	1,	1,	1,	1,
 		/* 8 */	1,	1,	0,	0,
@@ -255,7 +257,7 @@ char	xtexustar_tab[] = {
  * XT_ CPIO-1988 supported File type table
  */
 /* BEGIN CSTYLED */
-char	xtcpio_tab[] = {
+UInt8_t	xtcpio_tab[] = {
 		/* 0 */	0,	1,	1,	1,
 		/* 4 */	1,	1,	1,	1,
 		/* 8 */	1,	1,	0,	0,
@@ -273,7 +275,7 @@ char	xtcpio_tab[] = {
  * sockets cannot be handled in ansi tar, they are handled as regular files :-(
  */
 /* BEGIN CSTYLED */
-char	xttous_tab[] = {
+UInt8_t	xttous_tab[] = {
 		/* 0 */	0,       REGTYPE, CONTTYPE, LNKTYPE,
 		/* 4 */	SYMTYPE, DIRTYPE, CHRTYPE,  BLKTYPE,
 		/* 8 */	FIFOTYPE,REGTYPE/* socket */, 0/* bad */, 0/* bad */,
@@ -327,3 +329,17 @@ char	*xttoname_tab[] = {
 		/*28 */	"reserved",	"reserved",	"reserved",		"unknown/bad",
 };
 /* END CSTYLED */
+
+/*
+ * String lengths for above table
+ */
+UInt8_t	xtnamelen_tab[] = {
+		/*  0 */	11,  7, 10,  8,
+		/*  4 */	 7,  9, 17, 13,
+		/*  8 */	 4,  6, 21, 17,
+		/* 12 */	10, 10,  4, 10,
+		/* 16 */	 8,  8,  8,  8,
+		/* 20 */	 7,  8,  8, 21,
+		/* 24 */	 5,  6,  9,  4,
+		/* 28 */	 8,  8,  8, 11,
+};

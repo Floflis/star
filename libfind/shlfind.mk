@@ -1,4 +1,4 @@
-#ident @(#)shlfind.mk	1.3 09/12/06 
+#ident @(#)shlfind.mk	1.7 18/08/01 
 ###########################################################################
 SRCROOT=	..
 RULESDIR=	RULES
@@ -6,6 +6,8 @@ include		$(SRCROOT)/$(RULESDIR)/rules.top
 ###########################################################################
 
 SUBARCHDIR=	/pic
+SHL_MAJOR=	3
+SHL_MINOR=	0
 #.SEARCHLIST:	. $(ARCHDIR) stdio $(ARCHDIR)
 #VPATH=		.:stdio:$(ARCHDIR)
 INSDIR=		lib
@@ -18,10 +20,12 @@ CPPOPTS +=	-DUSE_LARGEFILES
 CPPOPTS +=	-DUSE_ACL
 CPPOPTS +=	-DUSE_XATTR
 CPPOPTS +=	-DUSE_NLS
+CPPOPTS +=	-DUSE_DGETTEXT			# _() -> dgettext()
+CPPOPTS +=	-DTEXT_DOMAIN=\"SCHILY_FIND\"
 CPPOPTS +=	-DSCHILY_PRINT
 
 include		Targets
-LIBS=		-lschily $(LIB_ACL_TEST) -lc
+LIBS=		-lschily $(LIB_ACL_TEST) $(LIB_INTL) -lc
 
 ###########################################################################
 include		$(SRCROOT)/$(RULESDIR)/rules.shl

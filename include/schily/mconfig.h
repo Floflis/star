@@ -1,8 +1,8 @@
-/* @(#)mconfig.h	1.69 14/01/03 Copyright 1995-2014 J. Schilling */
+/* @(#)mconfig.h	1.73 19/04/03 Copyright 1995-2019 J. Schilling */
 /*
  *	definitions for machine configuration
  *
- *	Copyright (c) 1995-2014 J. Schilling
+ *	Copyright (c) 1995-2019 J. Schilling
  *
  *	This file must be included before any other file.
  *	If this file is not included before stdio.h you will not be
@@ -111,6 +111,19 @@ extern "C" {
 #endif
 #endif
 
+/*
+ * GCC & Clang address sanitizer detection:
+ */
+#if	defined(__SANITIZE_ADDRESS__)		/* GCC */
+#define	IS_ASAN
+#endif
+#if	defined(__has_feature)			/* Clang */
+#if	__has_feature(address_sanitizer)
+#define	IS_ASAN
+#endif
+#endif
+
+
 /* ------------------------------------------------------------------------- */
 /*
  * Some magic that cannot (yet) be figured out with autoconf.
@@ -154,6 +167,14 @@ extern "C" {
 #endif
 
 /*
+ * The address sanitizer does not like our frame pointer modifications
+ * and would otherwise warn against a stack corruption.
+ */
+#ifdef	IS_ASAN
+#	undef	HAVE_SCANSTACK
+#endif
+
+/*
  * Allow to overwrite the defines in the makefiles by calling
  *
  *	make COPTX=-DFORCE_SCANSTACK
@@ -174,6 +195,15 @@ extern "C" {
 #ifdef	NO_SCANSTACK
 #	ifdef	HAVE_SCANSTACK
 #	undef	HAVE_SCANSTACK
+#	endif
+#endif
+
+/*
+ * This is the global switch to deactivate using #pragma weak
+ */
+#ifdef	NO_PRAGMA_WEAK
+#	ifdef	HAVE_PRAGMA_WEAK
+#	undef	HAVE_PRAGMA_WEAK
 #	endif
 #endif
 
@@ -538,9 +568,12 @@ extern "C" {
 /*
  * We need to include this here already in order to make sure that
  * every program that is based on mconfig.h will include schily/dbgmalloc.h
- * in case that we specify -DDBD_MALLOC
+ * in case that we specify -DDBG_MALLOC
  */
 #include <schily/dbgmalloc.h>
+#else
+#undef	DBG_MALLOC_MARK
+#define	DBG_MALLOC_MARK(a)
 #endif
 
 #ifdef __cplusplus

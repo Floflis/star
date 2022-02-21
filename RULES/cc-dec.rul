@@ -1,6 +1,6 @@
-#ident "@(#)cc-dec.rul	1.13 13/11/13 "
+#ident "@(#)cc-dec.rul	1.19 18/08/16 "
 ###########################################################################
-# Written 1998-2013 by J. Schilling
+# Written 1998-2018 by J. Schilling
 ###########################################################################
 #
 # Platform dependent MACROS for Digital UNIX cc
@@ -21,8 +21,8 @@
 # file and include the License file CDDL.Schily.txt from this distribution.
 ###########################################################################
 
-CPPFLAGS=	-DSCHILY_BUILD $(CPPOPTS) $(CPPOPTX) $(OSINCDIRS:%=-I%) $(OSDEFS) $(OSDEFSX)
-CFLAGS=		$(COPTS) $(CWARNOPTS) $(COPTOPT) $(DECCOPTOPT) $(COPTX)
+CPP_FLAGS=	-DSCHILY_BUILD $(CPPOPTS) $(CPPOPTX) $(OSINCDIRS:%=-I%) $(OSDEFS) $(OSDEFSX)
+C_FLAGS=	$(COPTS) $(CWARNOPTS) $(COPTOPT) $(DECCOPTOPT) $(COPTX)
 C++FLAGS=	$(C++OPTS) $(C++WARNOPTS) $(C++OPTOPT) $(DECC++OPTOPT) $(C++OPTX)
 
 CPPOPTS=	-I$(ARCHDIR) -I$(OINCSDIR) $(INCDIRS:%=-I%) $(INCDIRSX:%=-I%)
@@ -39,7 +39,9 @@ C++WOPTS=
 
 LIB_PREFIX=	lib
 LIB_SUFFIX=	.a
-SHL_SUFFIX=	.so.1.0
+SHL_SUFFIX=	.so.$(DYNMAJOR).$(DYNMINOR)
+
+LIB_C=		-lc
 
 LIBS_PATH=	-L$(OLIBSDIR) -L/usr/ccs/lib
 LIBS_PATH_STATIC= -L$(OLIBSDIR_STATIC) 
@@ -64,6 +66,11 @@ CC++_COM=	$(___CC++_COM:$(_UNIQ)%=%)
 
 CC_COM_DEF=	cc
 CC++_COM_DEF=	echo "C++ not yet supported"; exit -1; :
+#
+# Use to comment out C++ projects
+#
+C++BUILD=	$(NUMBER_SIGN)
+
 CC=		$(CC_COM_DEF)
 CCC=		$(CC++_COM_DEF)
 
